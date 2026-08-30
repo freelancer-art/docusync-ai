@@ -1,7 +1,10 @@
+import json
 import instructor
 from groq import Groq
+from sqlmodel import Session
 from app.config import settings
 from app.core.ocr_engine import ocr_engine
+from app.core.database import engine, DocumentRecord, init_db
 from app.schemas.document_type import DocumentClassification
 from app.schemas.tax_invoice import TaxInvoiceSchema
 from app.schemas.bank_statement import BankStatementSchema
@@ -9,6 +12,7 @@ from app.services.verification_service import verification_service
 
 class ExtractorService:
     def __init__(self):
+        init_db()
         self.client = instructor.from_groq(
             Groq(api_key=settings.GROQ_API_KEY),
             mode=instructor.Mode.JSON
@@ -25,7 +29,7 @@ class ExtractorService:
             temperature=0.0
         )
 
-    def process_document(self, file_path: str):
+    def process_document(self, file_path: str, filename: str = "uploaded_document.pdf"):
         raw_text, extraction_method = ocr_engine.extract_text(file_path)
 
         if not raw_text.strip():
@@ -36,7 +40,7 @@ class ExtractorService:
         doc_type = classification.document_type
 
         parsed_dict = {}
-        audit_results = None
+        audit_results = {"overall_status": "VERIFIED", "flags": []}
 
         # 2. Extract Data & Audit
         if doc_type == "tax_invoice":
@@ -51,8 +55,6 @@ class ExtractorService:
                 max_tokens=4096
             )
             parsed_dict = parsed_data.model_dump()
-            
-            # Run Rule Audit Engine
             audit_results = verification_service.audit_tax_invoice(parsed_dict).model_dump()
 
         elif doc_type == "bank_statement":
@@ -70,7 +72,26 @@ class ExtractorService:
         else:
             raise ValueError(f"Document type '{doc_type}' is not supported.")
 
+        # 3. Persist to SQLite Database
+        record = DocumentRecord(
+            filename=filename,
+            document_type=doc_type,
+            extraction_method=extraction_method,
+            overall_status=audit_results.get("overall_status", "VERIFIED"),
+            vendor_name=parsed_dict.get("vendor_name"),
+            invoice_number=parsed_dict.get("invoice_number"),
+            total_amount=parsed_dict.get("total_amount"),
+            raw_json_data=json.dumps(parsed_dict),
+            audit_flags_json=json.dumps(audit_results.get("flags", []))
+        )
+
+        with Session(engine) as session:
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+
         return {
+            "record_id": record.id,
             "document_type": doc_type,
             "extraction_method": extraction_method,
             "reasoning": classification.confidence_reasoning,
