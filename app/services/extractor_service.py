@@ -1,8 +1,10 @@
-import pdfplumber
 import instructor
 from groq import Groq
 from app.config import settings
+from app.core.ocr_engine import ocr_engine
+from app.schemas.document_type import DocumentClassification
 from app.schemas.tax_invoice import TaxInvoiceSchema
+from app.schemas.bank_statement import BankStatementSchema
 
 class ExtractorService:
     def __init__(self):
@@ -11,37 +13,65 @@ class ExtractorService:
             mode=instructor.Mode.JSON
         )
 
-    def extract_text_from_pdf(self, file_path: str) -> str:
-        extracted_text = ""
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    extracted_text += text + "\n"
-        return extracted_text
-
-    def parse_invoice(self, file_path: str) -> TaxInvoiceSchema:
-        raw_text = self.extract_text_from_pdf(file_path)
-        
-        if not raw_text.strip():
-            raise ValueError("No extractable text found in PDF. Scanned images require OCR preprocessing.")
-
-        structured_data = self.client.chat.completions.create(
+    def classify_document(self, raw_text: str) -> DocumentClassification:
+        return self.client.chat.completions.create(
             model=settings.PRIMARY_EXTRACTION_MODEL,
-            response_model=TaxInvoiceSchema,
+            response_model=DocumentClassification,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a precise document extraction assistant. Convert the provided tax invoice text into structured JSON matching the requested schema. Return JSON only."
+                    "content": "Analyze the text snippet from an uploaded financial document and classify its type accurately."
                 },
                 {
                     "role": "user",
-                    "content": f"Extract structured tax invoice data from this document:\n\n{raw_text}"
+                    "content": f"Classify this document content:\n\n{raw_text[:2000]}"
                 }
             ],
-            temperature=0.1,
-            max_tokens=4096
+            temperature=0.0
         )
-        return structured_data
+
+    def process_document(self, file_path: str):
+        raw_text, extraction_method = ocr_engine.extract_text(file_path)
+
+        if not raw_text.strip():
+            raise ValueError("Unable to extract text from document using digital or OCR methods.")
+
+        # Step 1: Classify Document
+        classification = self.classify_document(raw_text)
+        doc_type = classification.document_type
+
+        # Step 2: Extract structured data based on classified type
+        parsed_data = None
+        if doc_type == "tax_invoice":
+            parsed_data = self.client.chat.completions.create(
+                model=settings.PRIMARY_EXTRACTION_MODEL,
+                response_model=TaxInvoiceSchema,
+                messages=[
+                    {"role": "system", "content": "Extract tax invoice metadata precisely into JSON."},
+                    {"role": "user", "content": raw_text}
+                ],
+                temperature=0.1,
+                max_tokens=4096
+            )
+        elif doc_type == "bank_statement":
+            parsed_data = self.client.chat.completions.create(
+                model=settings.PRIMARY_EXTRACTION_MODEL,
+                response_model=BankStatementSchema,
+                messages=[
+                    {"role": "system", "content": "Extract bank statement metadata and transactions precisely into JSON."},
+                    {"role": "user", "content": raw_text}
+                ],
+                temperature=0.1,
+                max_tokens=4096
+            )
+        else:
+            raise ValueError(f"Document type '{doc_type}' is not yet supported for automated extraction.")
+
+        return {
+            "document_type": doc_type,
+            "extraction_method": extraction_method,
+            "reasoning": classification.confidence_reasoning,
+            "data": parsed_data.model_dump()
+        }
 
 extractor_service = ExtractorService()
