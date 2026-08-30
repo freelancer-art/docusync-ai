@@ -1,5 +1,6 @@
 import re
 from app.schemas.verification import DocumentAuditResult, AuditFlag
+from app.services.gstin_validator import gstin_validator
 
 # Standard Indian GSTIN Regex Pattern
 GSTIN_REGEX = r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
@@ -69,5 +70,27 @@ class VerificationService:
             overall_status=status,
             flags=flags
         )
+    
+    def audit_document(raw_json: dict) -> list[dict]:
+        flags = []
+    
+        vendor_gstin = raw_json.get("vendor_gstin")
+        if vendor_gstin:
+            gstin_res = gstin_validator.verify_gstin(vendor_gstin)
+            
+            if not gstin_res["valid"]:
+                flags.append({
+                    "code": "INVALID_GSTIN_CHECKSUM",
+                    "severity": "HIGH",
+                    "message": f"Vendor GSTIN '{vendor_gstin}' failed checksum validation: {gstin_res['error']}"
+                })
+            elif gstin_res["registration_status"] != "ACTIVE":
+                flags.append({
+                    "code": "GSTIN_INACTIVE",
+                    "severity": "HIGH",
+                    "message": f"Vendor GSTIN '{vendor_gstin}' registration is flagged as {gstin_res['registration_status']}."
+                })
+
+        return flags
 
 verification_service = VerificationService()

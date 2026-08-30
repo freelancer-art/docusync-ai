@@ -1,0 +1,12 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/amit/projects/docusync-ai
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.14.2
+collected 16 items
+
+tests/test_audit_engine.py ......                                        [ 37%]
+tests/test_security_hardening.py ..........                              [100%]
+
+============================== 16 passed in 3.85s ==============================
