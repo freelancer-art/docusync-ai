@@ -1,0 +1,30 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+
+# Application Storage & Temp Uploads
+storage/sample_uploads/*
+storage/extracted_outputs/*
+!storage/sample_uploads/.gitkeep
+!storage/extracted_outputs/.gitkeep
+
+# macOS / OS metadata
+.DS_Store
