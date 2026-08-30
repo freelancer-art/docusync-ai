@@ -6,6 +6,7 @@ from app.core.database import DocumentRecord, User, UserRole
 from app.services.gstin_validator import gstin_validator
 from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
+from app.core.security import validate_file_signature, InvalidFileTypeError
 
 
 @pytest.fixture
@@ -288,3 +289,23 @@ def test_malformed_json_types_in_line_items():
         # Exporter must complete execution without crashing
         csv_bytes = zoho_exporter.generate_bills_csv([record])
         assert isinstance(csv_bytes, bytes)
+
+def test_valid_pdf_magic_bytes():
+    fake_pdf = b"%PDF-1.7 header content here..."
+    assert validate_file_signature(fake_pdf) == "pdf"
+
+def test_valid_image_magic_bytes():
+    fake_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR..."
+    fake_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF..."
+    assert validate_file_signature(fake_png) == "png"
+    assert validate_file_signature(fake_jpeg) == "jpeg"
+
+def test_reject_executable_disguised_as_pdf():
+    # Windows MZ executable magic header disguised as PDF
+    malicious_exe = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00..."
+    with pytest.raises(InvalidFileTypeError, match="Unsupported file signature"):
+        validate_file_signature(malicious_exe)
+
+def test_reject_empty_file():
+    with pytest.raises(InvalidFileTypeError, match="file is empty"):
+        validate_file_signature(b"")
