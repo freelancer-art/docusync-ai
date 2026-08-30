@@ -1,9 +1,9 @@
 import json
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 from sqlmodel import Session, select
 from app.core.database import engine, DocumentRecord
 
-mcp = MCPServer("DocuSync AI Client Portal")
+mcp = FastMCP("DocuSync AI Client Portal")
 
 @mcp.tool()
 def get_flagged_documents(status: str = "REJECTED") -> str:
