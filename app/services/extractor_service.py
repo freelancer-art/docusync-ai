@@ -5,6 +5,7 @@ from app.core.ocr_engine import ocr_engine
 from app.schemas.document_type import DocumentClassification
 from app.schemas.tax_invoice import TaxInvoiceSchema
 from app.schemas.bank_statement import BankStatementSchema
+from app.services.verification_service import verification_service
 
 class ExtractorService:
     def __init__(self):
@@ -18,14 +19,8 @@ class ExtractorService:
             model=settings.PRIMARY_EXTRACTION_MODEL,
             response_model=DocumentClassification,
             messages=[
-                {
-                    "role": "system",
-                    "content": "Analyze the text snippet from an uploaded financial document and classify its type accurately."
-                },
-                {
-                    "role": "user",
-                    "content": f"Classify this document content:\n\n{raw_text[:2000]}"
-                }
+                {"role": "system", "content": "Classify document content accurately."},
+                {"role": "user", "content": f"Classify this text:\n\n{raw_text[:2000]}"}
             ],
             temperature=0.0
         )
@@ -36,12 +31,14 @@ class ExtractorService:
         if not raw_text.strip():
             raise ValueError("Unable to extract text from document using digital or OCR methods.")
 
-        # Step 1: Classify Document
+        # 1. Classify
         classification = self.classify_document(raw_text)
         doc_type = classification.document_type
 
-        # Step 2: Extract structured data based on classified type
-        parsed_data = None
+        parsed_dict = {}
+        audit_results = None
+
+        # 2. Extract Data & Audit
         if doc_type == "tax_invoice":
             parsed_data = self.client.chat.completions.create(
                 model=settings.PRIMARY_EXTRACTION_MODEL,
@@ -53,25 +50,32 @@ class ExtractorService:
                 temperature=0.1,
                 max_tokens=4096
             )
+            parsed_dict = parsed_data.model_dump()
+            
+            # Run Rule Audit Engine
+            audit_results = verification_service.audit_tax_invoice(parsed_dict).model_dump()
+
         elif doc_type == "bank_statement":
             parsed_data = self.client.chat.completions.create(
                 model=settings.PRIMARY_EXTRACTION_MODEL,
                 response_model=BankStatementSchema,
                 messages=[
-                    {"role": "system", "content": "Extract bank statement metadata and transactions precisely into JSON."},
+                    {"role": "system", "content": "Extract bank statement metadata precisely into JSON."},
                     {"role": "user", "content": raw_text}
                 ],
                 temperature=0.1,
                 max_tokens=4096
             )
+            parsed_dict = parsed_data.model_dump()
         else:
-            raise ValueError(f"Document type '{doc_type}' is not yet supported for automated extraction.")
+            raise ValueError(f"Document type '{doc_type}' is not supported.")
 
         return {
             "document_type": doc_type,
             "extraction_method": extraction_method,
             "reasoning": classification.confidence_reasoning,
-            "data": parsed_data.model_dump()
+            "data": parsed_dict,
+            "audit_summary": audit_results
         }
 
 extractor_service = ExtractorService()
