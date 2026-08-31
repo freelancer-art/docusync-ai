@@ -5,8 +5,7 @@ from typing import Any
 
 from groq import Groq, GroqError
 from instructor import Instructor, from_groq
-from instructor.exceptions import InstructorError
-from instructor.core import InstructorRetryException
+from instructor.core import InstructorError
 
 from app.config import settings
 from app.core import ocr_engine
