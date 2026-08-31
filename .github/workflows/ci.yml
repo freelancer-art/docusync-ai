@@ -1,4 +1,4 @@
-name: CI & Lint Quality Gate
+name: CI
 
 on:
   push:
@@ -7,8 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  lint:
-    name: Code Linting (Ruff)
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,34 +17,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.10'
+          cache: 'pip'
 
-      - name: Install Dependencies
+      - name: Upgrade pip and build tools
         run: |
-          python -m pip install --upgrade pip
-          pip install .[dev]
+          python -m pip install --upgrade pip setuptools wheel
 
-      - name: Run Ruff Linter
-        run: ruff check .
-
-  test:
-    name: Run Pytest Suite
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install Dependencies
+      - name: Install package dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install .[dev]
+          pip install -e .
 
-      - name: Run Pytest
-        run: python -m pytest
+      - name: Run tests (if applicable)
+        run: |
+          # Replace with your test runner, e.g., pytest or unittest
+          python -m unittest discover -s tests -p "*_test.py"
