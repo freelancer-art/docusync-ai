@@ -1,24 +1,25 @@
 import io
 import os
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends, BackgroundTasks
 from fastapi.responses import Response
 from sqlmodel import Session, select
+from sqlalchemy.engine import Engine
 
-from app.core.database import DocumentRecord, User, UserRole, get_session
+from app.core.database import DocumentRecord, User, UserRole, get_session, engine as default_engine
 from app.core.security import validate_file_signature, InvalidFileTypeError, get_current_user
 from app.services import zoho_exporter, tally_exporter
-from app.services.audit_engine import process_document_audit  # Import your audit engine worker
+from app.services.audit_engine import process_document_audit
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 UPLOAD_DIR = "storage/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-def run_document_processing_pipeline(doc_id: int):
+def run_document_processing_pipeline(doc_id: int, db_engine: Optional[Engine] = None):
     """Async background worker: runs AI vision extraction & audit checks."""
-    from app.core.database import engine
-    with Session(engine) as session:
+    target_engine = db_engine or default_engine
+    with Session(target_engine) as session:
         doc = session.get(DocumentRecord, doc_id)
         if not doc:
             return
@@ -41,14 +42,16 @@ async def upload_document(
     except InvalidFileTypeError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    safe_filename = DocumentRecord.sanitize_filename(file.filename)
+
     doc_record = DocumentRecord(
-        filename=file.filename,
+        filename=safe_filename,
         document_type="INVOICE",
         extraction_method="AI_VISION",
         overall_status="PENDING",
         client_id=current_user.id,
         raw_json_data="{}",
-        audit_flags_json="{}",
+        audit_flags_json="[]",
     )
 
     file_path = os.path.join(UPLOAD_DIR, doc_record.filename)
@@ -59,8 +62,8 @@ async def upload_document(
     session.commit()
     session.refresh(doc_record)
 
-    # Queue async processing task
-    background_tasks.add_task(run_document_processing_pipeline, doc_record.id)
+    # Pass the bound session engine so background tasks share the active database context (e.g. in tests)
+    background_tasks.add_task(run_document_processing_pipeline, doc_record.id, session.get_bind())
 
     return {
         "id": doc_record.id,

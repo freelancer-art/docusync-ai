@@ -48,10 +48,19 @@ class DocumentRecord(SQLModel, table=True):
     vendor_name: Optional[str] = None
     invoice_number: Optional[str] = None
     total_amount: Optional[float] = None
-    raw_json_data: str  # Serialized JSON string
-    audit_flags_json: str  # Serialized JSON flags
+    raw_json_data: str = Field(default="{}")
+    audit_flags_json: str = Field(default="[]")
     auditor_notes: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Payment Reconciliation Fields
+    payment_status: str = Field(default="UNPAID")
+    amount_paid: float = Field(default=0.0)
+    due_date: Optional[str] = None
+
+    # Multi-tenancy link
+    client_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    owner: Optional[User] = Relationship(back_populates="documents")
 
     @field_validator("filename", mode="before")
     @classmethod
@@ -60,10 +69,6 @@ class DocumentRecord(SQLModel, table=True):
             return v
         clean = v.replace("\\", "/")
         return os.path.basename(clean)
-
-    # Multi-tenancy link
-    client_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    owner: Optional[User] = Relationship(back_populates="documents")
 
 def get_session():
     with Session(engine) as session:

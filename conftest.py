@@ -4,7 +4,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 from app.main import app
-from app.core.database import get_session
+from app.core.database import get_session, DocumentRecord, User  # Import models here
 
 @pytest.fixture(name="session")
 def session_fixture():

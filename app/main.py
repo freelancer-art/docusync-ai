@@ -4,6 +4,7 @@ from app.api.v1.extraction import router as extraction_router
 from app.api.documents import router as documents_router
 from app.api.auth import router as auth_router
 from app.api.client_portal import router as portal_router
+from app.api.payments import router as payments_router
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
 
@@ -16,6 +17,8 @@ app.include_router(documents_router)
 app.include_router(auth_router)
 # Portal Router for Client Access
 app.include_router(portal_router)
+# Payments Router for Payment Processing
+app.include_router(payments_router)
 
 @app.get("/")
 def read_root():

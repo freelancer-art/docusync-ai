@@ -72,7 +72,7 @@ def test_sql_injection_prevention_in_queries(session):
         vendor_name="Malicious Vendor'; DROP TABLE users; --",
         total_amount=500.0,
         raw_json_data=json.dumps({"vendor_name": "Malicious Vendor"}),
-        audit_flags_json="{}",
+        audit_flags_json="[]",
         auditor_notes="",
     )
     session.add(doc)
@@ -89,6 +89,7 @@ def test_sql_injection_prevention_in_queries(session):
     users_in_db = session.exec(select(User)).all()
     assert len(users_in_db) == 1
     assert users_in_db[0].username == "testuser"
+
 
 def test_rbac_client_isolation(session):
     client_a = User(
@@ -116,7 +117,7 @@ def test_rbac_client_isolation(session):
         vendor_name="Vendor A",
         total_amount=100.0,
         raw_json_data="{}",
-        audit_flags_json="{}",
+        audit_flags_json="[]",
         auditor_notes="",
     )
     session.add(doc_a)
@@ -129,6 +130,7 @@ def test_rbac_client_isolation(session):
     )
     result = session.exec(stmt).all()
     assert len(result) == 0
+
 
 def test_filename_path_traversal_prevention():
     malicious_filenames = [
@@ -147,7 +149,7 @@ def test_filename_path_traversal_prevention():
             vendor_name="Test",
             total_amount=50.0,
             raw_json_data="{}",
-            audit_flags_json="{}",
+            audit_flags_json="[]",
             auditor_notes="",
         )
         assert ".." not in doc.filename
@@ -168,25 +170,8 @@ def test_csv_formula_injection_prevention():
     csv_bytes = zoho_exporter.generate_bills_csv([rec])
     csv_str = csv_bytes.decode("utf-8")
 
-    # Verify executable operators are prepended with an apostrophe quote
-    assert "'=CMD" in csv_str
-    assert "'+2+5" in csv_str
-    
-def test_csv_formula_injection_prevention():
-    class FormulaInjectionRecord:
-        id = 1
-        vendor_name = "=CMD|' /C calc'!A0"
-        invoice_number = "+2+5"
-        total_amount = 100.0
-        created_at = None
-        raw_json_data = "{}"
-
-    rec = FormulaInjectionRecord()
-    csv_bytes = zoho_exporter.generate_bills_csv([rec])
-    csv_str = csv_bytes.decode("utf-8")
-
-    # Assert raw executable operators are not present without escaping
     assert "=CMD" not in csv_str or "'=CMD" in csv_str or "\"=CMD" in csv_str
+
 
 def test_monetary_edge_cases_zero_and_negative():
     """Verify zero and negative total amounts are handled correctly without breaking exports."""
@@ -200,7 +185,7 @@ def test_monetary_edge_cases_zero_and_negative():
         vendor_name="Zero Vendor",
         total_amount=0.0,
         raw_json_data=json.dumps({"line_items": [{"description": "Free Item", "quantity": 1, "unit_price": 0.0, "amount": 0.0}]}),
-        audit_flags_json="{}",
+        audit_flags_json="[]",
     )
 
     record_negative = DocumentRecord(
@@ -213,7 +198,7 @@ def test_monetary_edge_cases_zero_and_negative():
         vendor_name="Refund Vendor",
         total_amount=-150.75,
         raw_json_data=json.dumps({"line_items": [{"description": "Refund", "quantity": 1, "unit_price": -150.75, "amount": -150.75}]}),
-        audit_flags_json="{}",
+        audit_flags_json="[]",
     )
 
     csv_bytes = zoho_exporter.generate_bills_csv([record_zero, record_negative])
@@ -237,7 +222,7 @@ def test_monetary_floating_point_precision():
         vendor_name="Precision Tech",
         total_amount=100.33333333333333,
         raw_json_data="{}",
-        audit_flags_json="{}",
+        audit_flags_json="[]",
     )
 
     csv_bytes = zoho_exporter.generate_bills_csv([record])
@@ -255,7 +240,6 @@ def test_missing_optional_fields_resilience():
         raw_json_data = None
 
     sparse_rec = SparseRecord()
-    # Exporter should fallback defaults without throwing AttributeError or TypeError
     csv_bytes = zoho_exporter.generate_bills_csv([sparse_rec])
     csv_str = csv_bytes.decode("utf-8")
 
@@ -283,16 +267,17 @@ def test_malformed_json_types_in_line_items():
             vendor_name="Bad Payload Ltd",
             total_amount=50.0,
             raw_json_data=payload,
-            audit_flags_json="{}",
+            audit_flags_json="[]",
         )
         
-        # Exporter must complete execution without crashing
         csv_bytes = zoho_exporter.generate_bills_csv([record])
         assert isinstance(csv_bytes, bytes)
+
 
 def test_valid_pdf_magic_bytes():
     fake_pdf = b"%PDF-1.7 header content here..."
     assert validate_file_signature(fake_pdf) == "pdf"
+
 
 def test_valid_image_magic_bytes():
     fake_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR..."
@@ -300,11 +285,12 @@ def test_valid_image_magic_bytes():
     assert validate_file_signature(fake_png) == "png"
     assert validate_file_signature(fake_jpeg) == "jpeg"
 
+
 def test_reject_executable_disguised_as_pdf():
-    # Windows MZ executable magic header disguised as PDF
     malicious_exe = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00..."
     with pytest.raises(InvalidFileTypeError, match="Unsupported file signature"):
         validate_file_signature(malicious_exe)
+
 
 def test_reject_empty_file():
     with pytest.raises(InvalidFileTypeError, match="file is empty"):
