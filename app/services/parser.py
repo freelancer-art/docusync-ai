@@ -1,7 +1,9 @@
 import os
-import json
+
 from google import genai
 from google.genai import types
+from pydantic import ValidationError
+
 from app.schemas.document import ExtractedInvoiceData
 
 # Initialize Gemini client
@@ -41,7 +43,7 @@ def parse_document_data(file_bytes: bytes, mime_type: str) -> dict:
         structured_data = ExtractedInvoiceData.model_validate_json(response.text)
         return structured_data.model_dump()
 
-    except Exception as e:
-        print(f"LLM Parsing failed: {str(e)}")
+    except (ValidationError, ValueError, AttributeError, RuntimeError) as e:
+        print(f"LLM Parsing failed: {e!s}")
         # Return empty structured schema fallback on failure
         return ExtractedInvoiceData().model_dump()

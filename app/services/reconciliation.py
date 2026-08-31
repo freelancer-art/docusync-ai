@@ -1,17 +1,20 @@
-from typing import Dict, Any
+from typing import Any
+
 from sqlmodel import Session, select
+
 from app.core.database import DocumentRecord
+
 
 class ReconciliationEngine:
     """Matches payments against open invoice records."""
 
     @staticmethod
     def process_payment(
-        session: Session, 
-        invoice_number: str, 
-        payment_amount: float
-    ) -> Dict[str, Any]:
-        statement = select(DocumentRecord).where(DocumentRecord.invoice_number == invoice_number)
+        session: Session, invoice_number: str, payment_amount: float
+    ) -> dict[str, Any]:
+        statement = select(DocumentRecord).where(
+            DocumentRecord.invoice_number == invoice_number
+        )
         doc = session.exec(statement).first()
 
         if not doc:
@@ -35,5 +38,5 @@ class ReconciliationEngine:
             "invoice_number": doc.invoice_number,
             "payment_status": doc.payment_status,
             "amount_paid": doc.amount_paid,
-            "balance_remaining": max(0.0, total_due - new_total_paid)
+            "balance_remaining": max(0.0, total_due - new_total_paid),
         }

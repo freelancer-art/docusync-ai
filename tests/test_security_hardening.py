@@ -1,12 +1,13 @@
 import json
+
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.database import DocumentRecord, User, UserRole
+from app.core.security import InvalidFileTypeError, validate_file_signature
 from app.services.gstin_validator import gstin_validator
 from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
-from app.core.security import validate_file_signature, InvalidFileTypeError
 
 
 @pytest.fixture
@@ -170,7 +171,7 @@ def test_csv_formula_injection_prevention():
     csv_bytes = zoho_exporter.generate_bills_csv([rec])
     csv_str = csv_bytes.decode("utf-8")
 
-    assert "=CMD" not in csv_str or "'=CMD" in csv_str or "\"=CMD" in csv_str
+    assert "=CMD" not in csv_str or "'=CMD" in csv_str or '"=CMD' in csv_str
 
 
 def test_monetary_edge_cases_zero_and_negative():
@@ -184,7 +185,18 @@ def test_monetary_edge_cases_zero_and_negative():
         invoice_number="INV-ZERO",
         vendor_name="Zero Vendor",
         total_amount=0.0,
-        raw_json_data=json.dumps({"line_items": [{"description": "Free Item", "quantity": 1, "unit_price": 0.0, "amount": 0.0}]}),
+        raw_json_data=json.dumps(
+            {
+                "line_items": [
+                    {
+                        "description": "Free Item",
+                        "quantity": 1,
+                        "unit_price": 0.0,
+                        "amount": 0.0,
+                    }
+                ]
+            }
+        ),
         audit_flags_json="[]",
     )
 
@@ -197,7 +209,18 @@ def test_monetary_edge_cases_zero_and_negative():
         invoice_number="CN-100",
         vendor_name="Refund Vendor",
         total_amount=-150.75,
-        raw_json_data=json.dumps({"line_items": [{"description": "Refund", "quantity": 1, "unit_price": -150.75, "amount": -150.75}]}),
+        raw_json_data=json.dumps(
+            {
+                "line_items": [
+                    {
+                        "description": "Refund",
+                        "quantity": 1,
+                        "unit_price": -150.75,
+                        "amount": -150.75,
+                    }
+                ]
+            }
+        ),
         audit_flags_json="[]",
     )
 
@@ -231,6 +254,7 @@ def test_monetary_floating_point_precision():
 
 def test_missing_optional_fields_resilience():
     """Verify exporter degrades gracefully when mandatory fields are None or omitted."""
+
     class SparseRecord:
         id = None
         vendor_name = None
@@ -269,7 +293,7 @@ def test_malformed_json_types_in_line_items():
             raw_json_data=payload,
             audit_flags_json="[]",
         )
-        
+
         csv_bytes = zoho_exporter.generate_bills_csv([record])
         assert isinstance(csv_bytes, bytes)
 

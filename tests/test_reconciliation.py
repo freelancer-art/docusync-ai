@@ -1,13 +1,17 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
-from app.core.database import User, UserRole, DocumentRecord
+import pytest
 
-def test_payment_reconciliation_flow(client: TestClient, session: Session):
+from app.core.database import DocumentRecord, User, UserRole
+
+
+@pytest.mark.asyncio
+async def test_payment_reconciliation_flow(async_client: AsyncClient, db_session: Session):
     admin = User(
         username="ca_admin_rec",
         full_name="CA Admin",
         hashed_password=User.hash_password("admin123"),
-        role=UserRole.CA_ADMIN
+        role=UserRole.CA_ADMIN,
     )
     session.add(admin)
     session.commit()
@@ -23,19 +27,21 @@ def test_payment_reconciliation_flow(client: TestClient, session: Session):
         amount_paid=0.0,
         payment_status="UNPAID",
         raw_json_data="{}",
-        audit_flags_json="[]"
+        audit_flags_json="[]",
     )
     session.add(doc)
     session.commit()
 
-    login_resp = client.post("/api/auth/login", data={"username": "ca_admin_rec", "password": "admin123"})
+    login_resp = client.post(
+        "/api/auth/login", data={"username": "ca_admin_rec", "password": "admin123"}
+    )
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     part_resp = client.post(
         "/api/payments/reconcile",
         json={"invoice_number": "INV-REC-100", "payment_amount": 200.0},
-        headers=headers
+        headers=headers,
     )
     assert part_resp.status_code == 200
     assert part_resp.json()["payment_status"] == "PARTIALLY_PAID"
@@ -44,7 +50,7 @@ def test_payment_reconciliation_flow(client: TestClient, session: Session):
     full_resp = client.post(
         "/api/payments/reconcile",
         json={"invoice_number": "INV-REC-100", "payment_amount": 300.0},
-        headers=headers
+        headers=headers,
     )
     assert full_resp.status_code == 200
     assert full_resp.json()["payment_status"] == "PAID"

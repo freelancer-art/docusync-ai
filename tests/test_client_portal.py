@@ -1,9 +1,12 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
+from httpx import AsyncClient
+import pytest
 
-from app.core.database import User, UserRole, DocumentRecord
+from app.core.database import DocumentRecord, User, UserRole
 
-def test_portal_review_queue_and_override(client: TestClient, session: Session):
+@pytest.mark.asyncio
+async def test_portal_review_queue_and_override(async_client: AsyncClient, db_session: Session):
     admin = User(
         username="admin_ca",
         full_name="CA Admin",

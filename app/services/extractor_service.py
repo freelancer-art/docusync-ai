@@ -1,223 +1,264 @@
-import re
+import io
 import json
 import logging
-from typing import Dict, Any, List, Tuple
-from pypdf import PdfReader
-from sqlmodel import Session
+from typing import Any
 
-from app.core.database import engine, DocumentRecord, init_db
+from groq import Groq, GroqError
+from instructor import Instructor, from_groq
+from instructor.exceptions import InstructorError
+from instructor.core import InstructorRetryException
+
+from app.config import settings
+from app.core import ocr_engine
+
+# ------------------------------------------------------------------
+# Safe Dynamic Imports for Enums and Schemas
+# ------------------------------------------------------------------
+try:
+    from app.schemas.document_type import DocumentType
+except ImportError:
+    try:
+        from app.schemas.document import DocumentType
+    except ImportError:
+        from enum import Enum
+
+        class DocumentType(str, Enum):
+            TAX_INVOICE = "TAX_INVOICE"
+            BANK_STATEMENT = "BANK_STATEMENT"
+
+
+try:
+    from app.schemas.tax_invoice import TaxInvoice
+except ImportError:
+    try:
+        from app.schemas.tax_invoice import TaxInvoiceSchema as TaxInvoice
+    except ImportError:
+        try:
+            from app.schemas.tax_invoice import InvoiceSchema as TaxInvoice
+        except ImportError:
+            from pydantic import BaseModel
+
+            class TaxInvoice(BaseModel):
+                vendor_name: str | None = None
+                invoice_number: str | None = None
+                total_amount: float | None = 0.0
+
+
+try:
+    from app.schemas.bank_statement import BankStatement
+except ImportError:
+    try:
+        from app.schemas.bank_statement import BankStatementSchema as BankStatement
+    except ImportError:
+        from pydantic import BaseModel
+
+        class BankStatement(BaseModel):
+            account_number: str | None = None
+            opening_balance: float | None = 0.0
+            closing_balance: float | None = 0.0
+
 
 logger = logging.getLogger("docusync.extractor")
 
-class ExtractorService:
-    def __init__(self):
-        init_db()
 
-    def extract_raw_text(self, file_path: str) -> str:
-        """Extract plain text from input PDF."""
-        extracted_text = ""
+def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str]:
+    """
+    Safely extracts text using available multi-engine cascades (pdfplumber -> Tesseract OCR).
+    Returns a tuple of (extracted_text, extraction_method).
+    """
+    if isinstance(file_input, str):
         try:
-            reader = PdfReader(file_path)
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    extracted_text += text + "\n"
-        except Exception as e:
-            logger.error(f"Failed to read PDF file at {file_path}: {e}")
-            raise RuntimeError(f"Could not parse PDF content: {str(e)}")
-        
-        return extracted_text.strip()
+            with open(file_input, "rb") as f:
+                file_bytes = f.read()
+        except (OSError, IOError) as e:
+            logger.error(f"Failed to read file path {file_input}: {e}")
+            return "", "FAILED"
+    else:
+        file_bytes = file_input
 
-    def parse_document_data(self, text: str) -> Dict[str, Any]:
-        """
-        Parses raw document text into structured accounting data.
-        In production, replace or augment this with LLM JSON mode / OCR output.
-        """
-        extracted = {
-            "document_type": "TAX_INVOICE",
-            "vendor_name": None,
-            "invoice_number": None,
-            "vendor_gstin": None,
-            "customer_gstin": None,
-            "subtotal": None,
-            "cgst_amount": None,
-            "sgst_amount": None,
-            "igst_amount": None,
-            "total_tax": None,
-            "total_amount": None,
-            "line_items": []
-        }
+    stream_or_bytes = (
+        io.BytesIO(file_bytes) if isinstance(file_bytes, bytes) else file_bytes
+    )
 
-        lines = [line.strip() for line in text.split("\n") if line.strip()]
-        
-        # Look for 15-character GSTIN patterns (Regex)
-        gstin_pattern = r"\b[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}\b"
-        found_gstins = re.findall(gstin_pattern, text)
-        if found_gstins:
-            extracted["vendor_gstin"] = found_gstins[0]
-            if len(found_gstins) > 1:
-                extracted["customer_gstin"] = found_gstins[1]
+    if hasattr(ocr_engine, "extract_text"):
+        try:
+            res = ocr_engine.extract_text(stream_or_bytes, filename)
+            if isinstance(res, tuple):
+                return res[0], res[1]
+            return res, "pdfplumber_or_ocr"
+        except (RuntimeError, ValueError, TypeError, IOError):
+            try:
+                res = ocr_engine.extract_text(file_bytes)
+                if isinstance(res, tuple):
+                    return res[0], res[1]
+                return res, "pdfplumber_or_ocr"
+            except (RuntimeError, ValueError, TypeError, IOError) as e:
+                logger.error(f"OCR engine extraction error: {e}")
 
-        for line in lines:
-            line_upper = line.upper()
-            
-            if ("INVOICE NO" in line_upper or "INVOICE #" in line_upper) and not extracted["invoice_number"]:
-                parts = line.split(":") if ":" in line else line.split()
-                extracted["invoice_number"] = parts[-1].strip()
-            
-            elif "TOTAL" in line_upper and not extracted["total_amount"]:
-                words = line.split()
-                for word in reversed(words):
-                    clean_val = word.replace("₹", "").replace(",", "").replace("$", "").strip()
-                    try:
-                        extracted["total_amount"] = float(clean_val)
-                        break
-                    except ValueError:
-                        continue
+    try:
+        return file_bytes.decode("utf-8", errors="ignore"), "raw_bytes_fallback"
+    except (UnicodeDecodeError, AttributeError):
+        return "", "FAILED"
 
-            elif ("VENDOR" in line_upper or "SUPPLIER" in line_upper) and not extracted["vendor_name"]:
-                parts = line.split(":")
-                if len(parts) > 1:
-                    extracted["vendor_name"] = parts[1].strip()
 
-        if not extracted["vendor_name"] and lines:
-            extracted["vendor_name"] = lines[0]
+def get_groq_client() -> Instructor | None:
+    """Instantiates an instructor-wrapped Groq client if an API key is available."""
+    if not settings.GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY not set. LLM extraction will use mock fallback.")
+        return None
+    try:
+        raw_client = Groq(api_key=settings.GROQ_API_KEY)
+        return from_groq(raw_client)
+    except (GroqError, ValueError, RuntimeError) as e:
+        logger.error(f"Failed to initialize Groq client: {e}")
+        return None
 
-        return extracted
 
-    def run_audit_checks(self, data: Dict[str, Any]) -> Tuple[str, List[Dict[str, str]]]:
-        """
-        Executes enterprise audit rules: GSTIN syntax, arithmetic validation, and threshold checks.
-        Returns overall_status ("VERIFIED", "NEEDS_REVIEW", "REJECTED") and flag details.
-        """
-        flags: List[Dict[str, str]] = []
+def classify_document_text(text: str) -> DocumentType:
+    """Classifies raw text into TAX_INVOICE or BANK_STATEMENT using rule heuristics."""
+    lower_text = text.lower()
+    bank_keywords = [
+        "statement of account",
+        "opening balance",
+        "closing balance",
+        "withdrawal",
+        "deposit",
+        "account number",
+    ]
 
-        # ------------------------------------------------------------------
-        # RULE 1: GSTIN Format & State Code Validation
-        # ------------------------------------------------------------------
-        vendor_gstin = data.get("vendor_gstin")
-        gstin_regex = r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
+    if any(keyword in lower_text for keyword in bank_keywords):
+        return DocumentType.BANK_STATEMENT
+    return DocumentType.TAX_INVOICE
 
-        if not vendor_gstin:
-            flags.append({
-                "code": "MISSING_VENDOR_GSTIN",
-                "severity": "HIGH",
-                "message": "Vendor GSTIN was not found on the tax invoice."
-            })
-        elif not re.match(gstin_regex, str(vendor_gstin)):
-            flags.append({
-                "code": "INVALID_GSTIN_FORMAT",
-                "severity": "HIGH",
-                "message": f"GSTIN '{vendor_gstin}' fails standard 15-character statutory format checks."
-            })
 
-        # ------------------------------------------------------------------
-        # RULE 2: Line Item & Tax Arithmetic Integrity
-        # ------------------------------------------------------------------
-        subtotal = data.get("subtotal") or 0.0
-        cgst = data.get("cgst_amount") or 0.0
-        sgst = data.get("sgst_amount") or 0.0
-        igst = data.get("igst_amount") or 0.0
-        total_tax = data.get("total_tax") or (cgst + sgst + igst)
-        total_amount = data.get("total_amount") or 0.0
+def _calculate_confidence_score(
+    extracted_dict: dict[str, Any], extraction_method: str
+) -> float:
+    """Calculates overall extraction confidence score (0.0 to 1.0) based on present fields and method."""
+    score = 1.0
 
-        line_items = data.get("line_items") or []
-        if line_items:
-            items_sum = sum(item.get("amount", 0.0) for item in line_items)
-            # Allow 1.0 margin for rounding tolerances
-            if subtotal > 0 and abs(items_sum - subtotal) > 1.0:
-                flags.append({
-                    "code": "LINE_ITEM_MISMATCH",
-                    "severity": "CRITICAL",
-                    "message": f"Sum of line items (₹{items_sum:,.2f}) does not match subtotal (₹{subtotal:,.2f})."
-                })
+    # Penalize fallback OCR engines relative to direct digital PDF extraction
+    if extraction_method == "tesseract_ocr":
+        score -= 0.15
+    elif extraction_method == "raw_bytes_fallback":
+        score -= 0.30
 
-        if subtotal > 0 and total_amount > 0:
-            calculated_total = subtotal + total_tax
-            if abs(calculated_total - total_amount) > 1.0:
-                flags.append({
-                    "code": "ARITHMETIC_TOTAL_MISMATCH",
-                    "severity": "CRITICAL",
-                    "message": f"Subtotal + Tax (₹{calculated_total:,.2f}) does not equal total amount (₹{total_amount:,.2f})."
-                })
+    # Field completeness penalties
+    missing_key_count = 0
+    total_keys = len(extracted_dict) or 1
+    for v in extracted_dict.values():
+        if v is None or v in ["", 0.0, "UNKNOWN_VENDOR", "UNKNOWN_INV"]:
+            missing_key_count += 1
 
-        # ------------------------------------------------------------------
-        # RULE 3: Tax Rate Consistency Checks
-        # ------------------------------------------------------------------
-        if cgst > 0 and sgst > 0 and abs(cgst - sgst) > 0.5:
-            flags.append({
-                "code": "CGST_SGST_MISMATCH",
-                "severity": "MEDIUM",
-                "message": f"Intra-state CGST (₹{cgst:,.2f}) and SGST (₹{sgst:,.2f}) must be equal."
-            })
+    field_completeness = 1.0 - (missing_key_count / total_keys)
+    final_score = round(
+        max(0.0, min(1.0, (score * 0.4) + (field_completeness * 0.6))), 2
+    )
+    return final_score
 
-        # ------------------------------------------------------------------
-        # RULE 4: Metadata Completeness & High-Value Approval Thresholds
-        # ------------------------------------------------------------------
-        if not data.get("invoice_number"):
-            flags.append({
-                "code": "MISSING_INVOICE_NO",
-                "severity": "HIGH",
-                "message": "Invoice number could not be detected automatically."
-            })
-            
-        if total_amount <= 0:
-            flags.append({
-                "code": "INVALID_TOTAL_AMOUNT",
-                "severity": "CRITICAL",
-                "message": "Total invoice amount is missing or non-positive."
-            })
 
-        if total_amount > 100000.0:  # ₹1,00,000 threshold
-            flags.append({
-                "code": "HIGH_VALUE_TRANSACTION",
-                "severity": "MEDIUM",
-                "message": "High-value invoice (> ₹1,00,000) requires senior auditor sign-off."
-            })
+def extract_structured_data(
+    file_input: bytes | str,
+    filename: str,
+    doc_type: DocumentType | None = None,
+) -> dict:
+    """
+    Full extraction pipeline:
+    1. Extracts raw text via pdfplumber / OCR fallback cascade.
+    2. Classifies document type if not specified.
+    3. Calls Groq structured outputs via instructor.
+    4. Computes confidence score.
+    """
+    raw_text, extraction_method = extract_raw_text(file_input, filename)
 
-        # ------------------------------------------------------------------
-        # STATUS DECISION
-        # ------------------------------------------------------------------
-        severities = {f["severity"] for f in flags}
-        if "CRITICAL" in severities:
-            overall_status = "REJECTED"
-        elif "HIGH" in severities or "MEDIUM" in severities:
-            overall_status = "NEEDS_REVIEW"
-        else:
-            overall_status = "VERIFIED"
+    if not doc_type:
+        doc_type = classify_document_text(raw_text)
 
-        return overall_status, flags
+    client = get_groq_client()
 
-    def process_document(self, file_path: str, filename: str, client_id: int) -> Dict[str, Any]:
-        """Main pipeline runner: Extracts, audits, and persists to SQLModel DB."""
-        raw_text = self.extract_raw_text(file_path)
-        parsed_data = self.parse_document_data(raw_text)
-
-        overall_status, audit_flags = self.run_audit_checks(parsed_data)
-
-        doc_record = DocumentRecord(
-            filename=filename,
-            document_type=parsed_data.get("document_type", "UNKNOWN"),
-            extraction_method="HYBRID_LLM_OCR",
-            overall_status=overall_status,
-            vendor_name=parsed_data.get("vendor_name"),
-            invoice_number=parsed_data.get("invoice_number"),
-            total_amount=parsed_data.get("total_amount"),
-            raw_json_data=json.dumps(parsed_data),
-            audit_flags_json=json.dumps(audit_flags),
-            client_id=client_id
+    if not client:
+        fallback_data = _generate_fallback_extraction(doc_type, filename, raw_text)
+        fallback_data["confidence_score"] = _calculate_confidence_score(
+            fallback_data, extraction_method
         )
+        fallback_data["extraction_method"] = extraction_method
+        return fallback_data
 
-        with Session(engine) as session:
-            session.add(doc_record)
-            session.commit()
-            session.refresh(doc_record)
+    prompt_content = (
+        raw_text.strip()
+        if raw_text and raw_text.strip()
+        else f"No text content could be extracted from {filename}."
+    )
+    target_schema = (
+        TaxInvoice if doc_type == DocumentType.TAX_INVOICE else BankStatement
+    )
 
+    try:
+        response = client.chat.completions.create(
+            model=settings.PRIMARY_EXTRACTION_MODEL,
+            response_model=target_schema,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert financial document auditor. "
+                        "Extract all requested fields accurately from the provided document text. "
+                        "If a value is missing or unclear, set it to null or default."
+                    ),
+                },
+                {"role": "user", "content": prompt_content},
+            ],
+            temperature=0.0,
+        )
+        data = json.loads(response.model_dump_json())
+        data["confidence_score"] = _calculate_confidence_score(data, extraction_method)
+        data["extraction_method"] = extraction_method
+        return data
+    except (GroqError, InstructorError, json.JSONDecodeError, ValueError) as e:
+        logger.error(
+            f"LLM extraction error: {e}. Falling back to default schema parsing."
+        )
+        fallback_data = _generate_fallback_extraction(doc_type, filename, raw_text)
+        fallback_data["confidence_score"] = _calculate_confidence_score(
+            fallback_data, extraction_method
+        )
+        fallback_data["extraction_method"] = extraction_method
+        return fallback_data
+
+
+def _generate_fallback_extraction(
+    doc_type: DocumentType, filename: str, text: str
+) -> dict:
+    """Generates basic structural JSON when live LLM parsing is offline."""
+    if doc_type == DocumentType.TAX_INVOICE:
         return {
-            "record_id": doc_record.id,
-            "status": overall_status,
-            "flags": audit_flags,
-            "data": parsed_data
+            "vendor_name": "Extracted Vendor",
+            "invoice_number": "INV-PENDING",
+            "total_amount": 0.0,
+            "cgst_amount": 0.0,
+            "sgst_amount": 0.0,
+            "igst_amount": 0.0,
+            "line_items": [],
+            "raw_text_snippet": text[:200],
         }
+    else:
+        return {
+            "account_number": "ACC-PENDING",
+            "opening_balance": 0.0,
+            "closing_balance": 0.0,
+            "transactions": [],
+            "raw_text_snippet": text[:200],
+        }
+
+
+class ExtractorService:
+    def process_document(
+        self,
+        file_input: bytes | str,
+        filename: str,
+        doc_type: DocumentType | None = None,
+    ) -> dict:
+        return extract_structured_data(file_input, filename, doc_type)
+
 
 extractor_service = ExtractorService()

@@ -1,19 +1,21 @@
 import json
-from typing import Any, List
+from typing import Any
 from xml.sax.saxutils import escape
+
 
 class TallyExporterService:
     @staticmethod
     def generate_purchase_voucher_xml(record: Any) -> str:
-        raw_data = {}
         raw_str = getattr(record, "raw_json_data", None)
         if raw_str:
             try:
-                raw_data = json.loads(raw_str)
+                json.loads(raw_str)
             except (json.JSONDecodeError, TypeError):
-                raw_data = {}
+                pass
 
-        vendor_name = escape(getattr(record, "vendor_name", None) or "Unassigned Vendor")
+        vendor_name = escape(
+            getattr(record, "vendor_name", None) or "Unassigned Vendor"
+        )
         rec_id = getattr(record, "id", "0")
         invoice_num = escape(getattr(record, "invoice_number", None) or f"INV-{rec_id}")
         total_amount = getattr(record, "total_amount", 0.0) or 0.0
@@ -40,7 +42,7 @@ class TallyExporterService:
           </VOUCHER>"""
 
     @classmethod
-    def generate_vouchers_xml(cls, records: List[Any]) -> str:
+    def generate_vouchers_xml(cls, records: list[Any]) -> str:
         vouchers = [cls.generate_purchase_voucher_xml(rec) for rec in records]
         vouchers_str = "\n".join(vouchers)
 
@@ -62,5 +64,6 @@ class TallyExporterService:
     </IMPORTDATA>
   </BODY>
 </ENVELOPE>"""
+
 
 tally_exporter = TallyExporterService()

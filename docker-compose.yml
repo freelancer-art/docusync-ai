@@ -1,0 +1,62 @@
+services:
+  web:
+    build: .
+    container_name: docusync_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - docusync_storage:/app/storage
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/storage/docusync.db
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    container_name: docusync_worker
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=info -c 2
+    volumes:
+      - .:/app
+      - docusync_storage:/app/storage
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/storage/docusync.db
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    build: .
+    container_name: docusync_dashboard
+    command: streamlit run app/dashboard.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+      - docusync_storage:/app/storage
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/storage/docusync.db
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    depends_on:
+      - web
+
+  redis:
+    image: redis:7-alpine
+    container_name: docusync_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  docusync_storage:

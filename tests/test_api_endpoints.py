@@ -3,14 +3,15 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
+from app.api.documents import get_current_user, get_session
+from app.core.database import DocumentRecord, User, UserRole
 from app.main import app
-from app.api.documents import get_session, get_current_user
-from app.core.database import User, UserRole, DocumentRecord
 
 # Set up clean in-memory SQLite database for test isolation
 engine = create_engine(
     "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
 )
+
 
 @pytest.fixture(name="session")
 def session_fixture():
@@ -18,6 +19,7 @@ def session_fixture():
     with Session(engine) as session:
         yield session
     SQLModel.metadata.drop_all(engine)
+
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
@@ -32,7 +34,12 @@ def client_fixture(session: Session):
 
 def test_upload_document_creates_db_record(client: TestClient, session: Session):
     # Setup test user
-    user = User(username="test_client", full_name="Test Client", hashed_password="pw", role=UserRole.CLIENT)
+    user = User(
+        username="test_client",
+        full_name="Test Client",
+        hashed_password="pw",
+        role=UserRole.CLIENT,
+    )
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -45,10 +52,10 @@ def test_upload_document_creates_db_record(client: TestClient, session: Session)
     response = client.post("/api/documents/upload", files=files)
     assert response.status_code == 200
     data = response.json()
-    
+
     # Path traversal should be stripped
     assert data["filename"] == "malicious_invoice.pdf"
-    
+
     # Verify DB record creation
     db_doc = session.get(DocumentRecord, data["id"])
     assert db_doc is not None
@@ -56,8 +63,20 @@ def test_upload_document_creates_db_record(client: TestClient, session: Session)
 
 
 def test_multitenant_access_control(client: TestClient, session: Session):
-    user1 = User(id=1, username="user1", full_name="User 1", hashed_password="pw", role=UserRole.CLIENT)
-    user2 = User(id=2, username="user2", full_name="User 2", hashed_password="pw", role=UserRole.CLIENT)
+    user1 = User(
+        id=1,
+        username="user1",
+        full_name="User 1",
+        hashed_password="pw",
+        role=UserRole.CLIENT,
+    )
+    user2 = User(
+        id=2,
+        username="user2",
+        full_name="User 2",
+        hashed_password="pw",
+        role=UserRole.CLIENT,
+    )
     session.add_all([user1, user2])
     session.commit()
 

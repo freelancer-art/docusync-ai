@@ -5,7 +5,9 @@ description = "AI-powered document extraction portal"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "aiofiles>=25.1.0",
     "bcrypt>=5.0.0",
+    "celery>=5.6.3",
     "fastapi>=0.141.1",
     "fastmcp>=2.14.1",
     "google-genai>=2.20.0",
@@ -23,6 +25,7 @@ dependencies = [
     "pytesseract>=0.3.13",
     "python-dotenv>=1.2.3",
     "python-multipart>=0.0.32",
+    "redis>=8.1.0",
     "reportlab>=5.0.1",
     "sqlmodel>=0.0.42",
     "streamlit>=1.62.0",
@@ -43,4 +46,11 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.5",
 ]
+
+# pyproject.toml
+[tool.ruff.lint]
+ignore = ["B008"]

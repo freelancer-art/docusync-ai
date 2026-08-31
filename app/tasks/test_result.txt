@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/amit/projects/docusync-ai/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/amit/projects/docusync-ai
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 0 items
+
+=============================== warnings summary ===============================
+../services/extractor_service.py:8
+  /home/amit/projects/docusync-ai/app/services/extractor_service.py:8: DeprecationWarning: Importing from 'instructor.exceptions' is deprecated and will be removed in a future version. Please import from 'instructor.core' instead. For example: 'from instructor.core import InstructorRetryException'
+    from instructor.exceptions import InstructorError
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================== 1 warning in 0.04s ==============================

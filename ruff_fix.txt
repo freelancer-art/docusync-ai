@@ -1,0 +1,637 @@
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/auth.py:27:44
+   |
+25 | @router.post("/login")
+26 | async def login(
+27 |     form_data: OAuth2PasswordRequestForm = Depends(),
+   |                                            ^^^^^^^^^
+28 |     session: Session = Depends(get_session),
+29 | ):
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/auth.py:28:24
+   |
+26 | async def login(
+27 |     form_data: OAuth2PasswordRequestForm = Depends(),
+28 |     session: Session = Depends(get_session),
+   |                        ^^^^^^^^^^^^^^^^^^^^
+29 | ):
+30 |     user = session.exec(select(User).where(User.username == form_data.username)).first()
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/auth.py:49:54
+   |
+47 | )
+48 | async def register_ca_admin(
+49 |     payload: UserRegisterRequest, session: Session = Depends(get_session)
+   |                                                      ^^^^^^^^^^^^^^^^^^^^
+50 | ):
+51 |     """Public endpoint to register a new CA Admin account."""
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/auth.py:84:26
+   |
+82 | async def onboard_client(
+83 |     payload: UserRegisterRequest,
+84 |     current_user: User = Depends(get_current_user),
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+85 |     session: Session = Depends(get_session),
+86 | ):
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/auth.py:85:24
+   |
+83 |     payload: UserRegisterRequest,
+84 |     current_user: User = Depends(get_current_user),
+85 |     session: Session = Depends(get_session),
+   |                        ^^^^^^^^^^^^^^^^^^^^
+86 | ):
+87 |     """CA Admin endpoint: Create and onboard a new Client under the active CA."""
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/auth.py:122:26
+    |
+120 | @router.get("/clients", response_model=list[ClientResponse])
+121 | async def list_clients(
+122 |     current_user: User = Depends(get_current_user),
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+123 |     session: Session = Depends(get_session),
+124 | ):
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/auth.py:123:24
+    |
+121 | async def list_clients(
+122 |     current_user: User = Depends(get_current_user),
+123 |     session: Session = Depends(get_session),
+    |                        ^^^^^^^^^^^^^^^^^^^^
+124 | ):
+125 |     """CA Admin endpoint: Retrieve a list of all registered client accounts."""
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/client_portal.py:45:26
+   |
+43 | @router.get("/review-queue", response_model=list[DocumentDetailResponse])
+44 | async def get_review_queue(
+45 |     current_user: User = Depends(get_current_user),
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+46 |     session: Session = Depends(get_session),
+47 | ):
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/client_portal.py:46:24
+   |
+44 | async def get_review_queue(
+45 |     current_user: User = Depends(get_current_user),
+46 |     session: Session = Depends(get_session),
+   |                        ^^^^^^^^^^^^^^^^^^^^
+47 | ):
+48 |     """CA Admin endpoint: Returns all documents requiring CA review."""
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/client_portal.py:83:26
+   |
+81 |     doc_id: int,
+82 |     payload: StatusOverrideRequest,
+83 |     current_user: User = Depends(get_current_user),
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+84 |     session: Session = Depends(get_session),
+85 | ):
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/client_portal.py:84:24
+   |
+82 |     payload: StatusOverrideRequest,
+83 |     current_user: User = Depends(get_current_user),
+84 |     session: Session = Depends(get_session),
+   |                        ^^^^^^^^^^^^^^^^^^^^
+85 | ):
+86 |     """CA Admin endpoint: Manual approval or rejection of flagged document status."""
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/client_portal.py:127:26
+    |
+125 |     doc_id: int,
+126 |     payload: DocumentFieldOverrideRequest,
+127 |     current_user: User = Depends(get_current_user),
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+128 |     session: Session = Depends(get_session),
+129 | ):
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/client_portal.py:128:24
+    |
+126 |     payload: DocumentFieldOverrideRequest,
+127 |     current_user: User = Depends(get_current_user),
+128 |     session: Session = Depends(get_session),
+    |                        ^^^^^^^^^^^^^^^^^^^^
+129 | ):
+130 |     """CA Admin endpoint: Edit extracted invoice fields directly and re-run audit validation."""
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/client_portal.py:176:26
+    |
+174 | @router.get("/my-documents", response_model=list[DocumentDetailResponse])
+175 | async def get_client_documents(
+176 |     current_user: User = Depends(get_current_user),
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+177 |     session: Session = Depends(get_session),
+178 | ):
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/client_portal.py:177:24
+    |
+175 | async def get_client_documents(
+176 |     current_user: User = Depends(get_current_user),
+177 |     session: Session = Depends(get_session),
+    |                        ^^^^^^^^^^^^^^^^^^^^
+178 | ):
+179 |     """Client endpoint: Fetch logged-in user's active documents and flags."""
+    |
+
+B008 Do not perform function call `File` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/documents.py:70:24
+   |
+68 | async def upload_document(
+69 |     background_tasks: BackgroundTasks,
+70 |     file: UploadFile = File(...),
+   |                        ^^^^^^^^^
+71 |     current_user: User = Depends(get_current_user),
+72 |     session: Session = Depends(get_session),
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/documents.py:71:26
+   |
+69 |     background_tasks: BackgroundTasks,
+70 |     file: UploadFile = File(...),
+71 |     current_user: User = Depends(get_current_user),
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+72 |     session: Session = Depends(get_session),
+73 | ):
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/documents.py:72:24
+   |
+70 |     file: UploadFile = File(...),
+71 |     current_user: User = Depends(get_current_user),
+72 |     session: Session = Depends(get_session),
+   |                        ^^^^^^^^^^^^^^^^^^^^
+73 | ):
+74 |     content = await file.read()
+   |
+
+ASYNC230 Async functions should not open files with blocking methods like `open`
+  --> app/api/documents.py:94:10
+   |
+93 |     file_path = os.path.join(UPLOAD_DIR, doc_record.filename)
+94 |     with open(file_path, "wb") as buffer:
+   |          ^^^^
+95 |         buffer.write(content)
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/documents.py:116:26
+    |
+114 | async def get_document(
+115 |     doc_id: int,
+116 |     current_user: User = Depends(get_current_user),
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+117 |     session: Session = Depends(get_session),
+118 | ):
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/documents.py:117:24
+    |
+115 |     doc_id: int,
+116 |     current_user: User = Depends(get_current_user),
+117 |     session: Session = Depends(get_session),
+    |                        ^^^^^^^^^^^^^^^^^^^^
+118 | ):
+119 |     doc = session.get(DocumentRecord, doc_id)
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/documents.py:140:26
+    |
+138 | @router.get("/export/zoho")
+139 | async def export_zoho_csv(
+140 |     current_user: User = Depends(get_current_user),
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+141 |     session: Session = Depends(get_session),
+142 | ):
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/documents.py:141:24
+    |
+139 | async def export_zoho_csv(
+140 |     current_user: User = Depends(get_current_user),
+141 |     session: Session = Depends(get_session),
+    |                        ^^^^^^^^^^^^^^^^^^^^
+142 | ):
+143 |     query = select(DocumentRecord)
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/documents.py:161:26
+    |
+159 | @router.get("/export/tally")
+160 | async def export_tally_xml(
+161 |     current_user: User = Depends(get_current_user),
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+162 |     session: Session = Depends(get_session),
+163 | ):
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+   --> app/api/documents.py:162:24
+    |
+160 | async def export_tally_xml(
+161 |     current_user: User = Depends(get_current_user),
+162 |     session: Session = Depends(get_session),
+    |                        ^^^^^^^^^^^^^^^^^^^^
+163 | ):
+164 |     query = select(DocumentRecord)
+    |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/payments.py:20:26
+   |
+18 | async def reconcile_payment(
+19 |     payload: PaymentRecordRequest,
+20 |     current_user: User = Depends(get_current_user),
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+21 |     session: Session = Depends(get_session),
+22 | ):
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/payments.py:21:24
+   |
+19 |     payload: PaymentRecordRequest,
+20 |     current_user: User = Depends(get_current_user),
+21 |     session: Session = Depends(get_session),
+   |                        ^^^^^^^^^^^^^^^^^^^^
+22 | ):
+23 |     if current_user.role != UserRole.CA_ADMIN:
+   |
+
+B008 Do not perform function call `File` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/v1/extraction.py:16:52
+   |
+15 | @router.post("/process-auto")
+16 | async def process_document_auto(file: UploadFile = File(...)):
+   |                                                    ^^^^^^^^^
+17 |     """
+18 |     Universal ingestion endpoint: Auto-detects document type (Tax Invoice / Bank Statement),
+   |
+
+ASYNC230 Async functions should not open files with blocking methods like `open`
+  --> app/api/v1/extraction.py:28:14
+   |
+26 |     file_path = os.path.join(TEMP_UPLOAD_DIR, file.filename)
+27 |     try:
+28 |         with open(file_path, "wb") as buffer:
+   |              ^^^^
+29 |             shutil.copyfileobj(file.file, buffer)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/api/v1/extraction.py:33:12
+   |
+31 |         result = extractor_service.process_document(file_path)
+32 |         return result
+33 |     except Exception as e:
+   |            ^^^^^^^^^
+34 |         raise HTTPException(status_code=500, detail=str(e))
+35 |     finally:
+   |
+
+B008 Do not perform function call `File` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/api/v1/extraction.py:47:47
+   |
+45 |     dependencies=[Depends(rate_limiter(requests_limit=5, window_seconds=60))],
+46 | )
+47 | async def extract_document(file: UploadFile = File(...)):
+   |                                               ^^^^^^^^^
+48 |     # Existing extraction handler logic
+49 |     return {"status": "success", "filename": file.filename}
+   |
+
+RUF013 PEP 484 prohibits implicit `Optional`
+  --> app/core/middleware.py:26:62
+   |
+26 | def setup_security_middleware(app: FastAPI, allowed_origins: list[str] = None) -> None:
+   |                                                              ^^^^^^^^^
+27 |     """
+28 |     Attach CORS and custom security headers middleware to the FastAPI application.
+   |
+help: Convert to `T | None`
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/core/ocr_engine.py:33:16
+   |
+31 |                     if text:
+32 |                         extracted_text += text + "\n"
+33 |         except Exception:
+   |                ^^^^^^^^^
+34 |             extracted_text = ""
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/core/ocr_engine.py:53:16
+   |
+51 |                     image = page.to_image(resolution=300).original
+52 |                     ocr_text += pytesseract.image_to_string(image) + "\n"
+53 |         except Exception:
+   |                ^^^^^^^^^
+54 |             # Safely handle malformed PDF streams or unparseable files
+55 |             return ocr_text
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/core/rate_limiter.py:15:8
+   |
+13 |         socket_timeout=2,
+14 |     )
+15 | except Exception:
+   |        ^^^^^^^^^
+16 |     redis_client = None
+   |
+
+B008 Do not perform function call `Depends` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+  --> app/core/security.py:77:61
+   |
+76 | def get_current_user(
+77 |     token: str = Depends(oauth2_scheme), session: Session = Depends(get_session)
+   |                                                             ^^^^^^^^^^^^^^^^^^^^
+78 | ) -> User:
+79 |     credentials_exception = HTTPException(
+   |
+
+SIM102 Use a single `if` statement instead of nested `if` statements
+   --> app/dashboard.py:130:5
+    |
+128 |       )
+129 |
+130 | /     if uploaded_file is not None and target_client_id is not None:
+131 | |         if st.button("Process & Save", type="primary"):
+    | |_______________________________________________________^
+132 |               with st.spinner("Processing & auditing document..."):
+133 |                   with tempfile.NamedTemporaryFile(
+    |
+help: Combine `if` statements using `and`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> app/dashboard.py:151:24
+    |
+149 |                     st.json(result["data"])
+150 |
+151 |                 except Exception as e:
+    |                        ^^^^^^^^^
+152 |                     st.error(f"Error: {e!s}")
+153 |                 finally:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/main.py:56:12
+   |
+54 |             session.exec(select(1)).first()
+55 |             checks["database"] = "healthy"
+56 |     except Exception as e:
+   |            ^^^^^^^^^
+57 |         checks["database"] = f"unhealthy: {e!s}"
+58 |         is_ready = False
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/main.py:69:12
+   |
+67 |             checks["redis"] = "unhealthy"
+68 |             is_ready = False
+69 |     except Exception as e:
+   |            ^^^^^^^^^
+70 |         checks["redis"] = f"unhealthy: {e!s}"
+71 |         is_ready = False
+   |
+
+SIM102 Use a single `if` statement instead of nested `if` statements
+   --> app/services/audit_engine.py:144:9
+    |
+143 |           # 4. Tax Amount Math Validation
+144 | /         if tax_amount is not None and doc.total_amount and doc.total_amount > 0:
+145 | |             if float(tax_amount) >= float(doc.total_amount):
+    | |____________________________________________________________^
+146 |                   flags.append("TAX_AMOUNT_EXCEEDS_TOTAL")
+    |
+help: Combine `if` statements using `and`
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/services/extractor_service.py:71:16
+   |
+69 |             with open(file_input, "rb") as f:
+70 |                 file_bytes = f.read()
+71 |         except Exception as e:
+   |                ^^^^^^^^^
+72 |             logger.error(f"Failed to read file path {file_input}: {e}")
+73 |             return "", "FAILED"
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/services/extractor_service.py:87:16
+   |
+85 |                 return res[0], res[1]
+86 |             return res, "pdfplumber_or_ocr"
+87 |         except Exception:
+   |                ^^^^^^^^^
+88 |             try:
+89 |                 res = ocr_engine.extract_text(file_bytes)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/services/extractor_service.py:93:20
+   |
+91 |                     return res[0], res[1]
+92 |                 return res, "pdfplumber_or_ocr"
+93 |             except Exception as e:
+   |                    ^^^^^^^^^
+94 |                 logger.error(f"OCR engine extraction error: {e}")
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/services/extractor_service.py:98:12
+   |
+96 |     try:
+97 |         return file_bytes.decode("utf-8", errors="ignore"), "raw_bytes_fallback"
+98 |     except Exception:
+   |            ^^^^^^^^^
+99 |         return "", "FAILED"
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> app/services/extractor_service.py:110:12
+    |
+108 |         raw_client = Groq(api_key=settings.GROQ_API_KEY)
+109 |         return from_groq(raw_client)
+110 |     except Exception as e:
+    |            ^^^^^^^^^
+111 |         logger.error(f"Failed to initialize Groq client: {e}")
+112 |         return None
+    |
+
+PERF102 When using only the values of a dict use the `values()` method
+   --> app/services/extractor_service.py:147:17
+    |
+145 |     missing_key_count = 0
+146 |     total_keys = len(extracted_dict) or 1
+147 |     for k, v in extracted_dict.items():
+    |                 ^^^^^^^^^^^^^^^^^^^^
+148 |         if v is None or v in ["", 0.0, "UNKNOWN_VENDOR", "UNKNOWN_INV"]:
+149 |             missing_key_count += 1
+    |
+help: Replace `.items()` with `.values()`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> app/services/extractor_service.py:215:12
+    |
+213 |         data["extraction_method"] = extraction_method
+214 |         return data
+215 |     except Exception as e:
+    |            ^^^^^^^^^
+216 |         logger.error(
+217 |             f"LLM extraction error: {e}. Falling back to default schema parsing."
+    |
+
+RUF012 Mutable default value for class attribute
+  --> app/services/gstin_validator.py:6:19
+   |
+ 5 |   class GSTINValidatorService:
+ 6 |       STATE_CODES = {
+   |  ___________________^
+ 7 | |         "01": "Jammu & Kashmir",
+ 8 | |         "02": "Himachal Pradesh",
+ 9 | |         "03": "Punjab",
+10 | |         "04": "Chandigarh",
+11 | |         "05": "Uttarakhand",
+12 | |         "06": "Haryana",
+13 | |         "07": "Delhi",
+14 | |         "08": "Rajasthan",
+15 | |         "09": "Uttar Pradesh",
+16 | |         "10": "Bihar",
+17 | |         "11": "Sikkim",
+18 | |         "12": "Arunachal Pradesh",
+19 | |         "13": "Nagaland",
+20 | |         "14": "Manipur",
+21 | |         "15": "Mizoram",
+22 | |         "16": "Tripura",
+23 | |         "17": "Meghalaya",
+24 | |         "18": "Assam",
+25 | |         "19": "West Bengal",
+26 | |         "20": "Jharkhand",
+27 | |         "21": "Odisha",
+28 | |         "22": "Chhattisgarh",
+29 | |         "23": "Madhya Pradesh",
+30 | |         "24": "Gujarat",
+31 | |         "26": "Dadra & Nagar Haveli and Daman & Diu",
+32 | |         "27": "Maharashtra",
+33 | |         "29": "Karnataka",
+34 | |         "30": "Goa",
+35 | |         "31": "Lakshadweep",
+36 | |         "32": "Kerala",
+37 | |         "33": "Tamil Nadu",
+38 | |         "34": "Puducherry",
+39 | |         "35": "Andaman & Nicobar Islands",
+40 | |         "36": "Telangana",
+41 | |         "37": "Andhra Pradesh",
+42 | |         "38": "Ladakh",
+43 | |     }
+   | |_____^
+44 |
+45 |       CHAR_MAP = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+   |
+help: Consider initializing in `__init__` or annotating with `typing.ClassVar`
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/services/parser.py:45:12
+   |
+43 |         return structured_data.model_dump()
+44 |
+45 |     except Exception as e:
+   |            ^^^^^^^^^
+46 |         print(f"LLM Parsing failed: {e!s}")
+47 |         # Return empty structured schema fallback on failure
+   |
+
+F841 Local variable `raw_data` is assigned to but never used
+  --> app/services/tally_exporter.py:15:17
+   |
+13 |                 raw_data = json.loads(raw_str)
+14 |             except (json.JSONDecodeError, TypeError):
+15 |                 raw_data = {}
+   |                 ^^^^^^^^
+16 |
+17 |         vendor_name = escape(
+   |
+help: Remove assignment to unused variable `raw_data`
+
+BLE001 Do not catch blind exception: `Exception`
+  --> app/worker.py:57:12
+   |
+55 |                 "vendor": doc.vendor_name,
+56 |             }
+57 |     except Exception as exc:
+   |            ^^^^^^^^^
+58 |         # Retry task on transient failures (e.g., API timeouts, DB disconnects)
+59 |         raise self.retry(exc=exc)
+   |
+
+DTZ001 `datetime.datetime()` called without a `tzinfo` argument
+  --> tests/test_audit_engine.py:23:27
+   |
+21 |         self.invoice_number = invoice_number
+22 |         self.total_amount = total_amount
+23 |         self.created_at = datetime(2026, 8, 30, 12, 0, 0)
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+24 |         self.raw_json_data = json.dumps(
+25 |             raw_data
+   |
+help: Pass a `datetime.timezone` object to the `tzinfo` parameter
+
+F811 Redefinition of unused `limited_endpoint` from line 14
+  --> tests/test_rate_limiter.py:40:5
+   |
+38 |     dependencies=[Depends(rate_limiter(requests_limit=3, window_seconds=60))],
+39 | )
+40 | def limited_endpoint():
+   |     ^^^^^^^^^^^^^^^^ `limited_endpoint` redefined here
+41 |     return {"message": "success"}
+   |
+  ::: tests/test_rate_limiter.py:14:5
+   |
+12 |     dependencies=[Depends(rate_limiter(requests_limit=3, window_seconds=60))],
+13 | )
+14 | def limited_endpoint():
+   |     ---------------- previous definition of `limited_endpoint` here
+15 |     return {"message": "success"}
+   |
+help: Remove definition: `limited_endpoint`
+
+Found 54 errors.
+No fixes available (3 hidden fixes can be enabled with the `--unsafe-fixes` option).

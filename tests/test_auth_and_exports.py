@@ -3,10 +3,13 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
+from app.core.database import DocumentRecord, User, UserRole, get_session
 from app.main import app
-from app.core.database import get_session, User, UserRole, DocumentRecord
 
-engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+engine = create_engine(
+    "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+)
+
 
 @pytest.fixture(name="session")
 def session_fixture():
@@ -14,6 +17,7 @@ def session_fixture():
     with Session(engine) as session:
         yield session
     SQLModel.metadata.drop_all(engine)
+
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
@@ -25,20 +29,20 @@ def client_fixture(session: Session):
     yield client
     app.dependency_overrides.clear()
 
+
 def test_login_and_jwt_export_flow(client: TestClient, session: Session):
     user = User(
         username="ca_user",
         full_name="CA Test",
         hashed_password=User.hash_password("admin123"),
-        role=UserRole.CA_ADMIN
+        role=UserRole.CA_ADMIN,
     )
     session.add(user)
     session.commit()
 
     # 1. Test Login Endpoint (Form data transmission)
     login_resp = client.post(
-        "/api/auth/login", 
-        data={"username": "ca_user", "password": "admin123"}
+        "/api/auth/login", data={"username": "ca_user", "password": "admin123"}
     )
     assert login_resp.status_code == 200
     token = login_resp.json()["access_token"]
@@ -72,19 +76,19 @@ def test_login_and_jwt_export_flow(client: TestClient, session: Session):
     assert "application/xml" in tally_resp.headers["content-type"]
     assert "INV-EXP-001" in tally_resp.text
 
+
 def test_tally_xml_export_flow(client: TestClient, session: Session):
     user = User(
         username="ca_tally_user",
         full_name="CA Tally Test",
         hashed_password=User.hash_password("admin123"),
-        role=UserRole.CA_ADMIN
+        role=UserRole.CA_ADMIN,
     )
     session.add(user)
     session.commit()
 
     login_resp = client.post(
-        "/api/auth/login",
-        data={"username": "ca_tally_user", "password": "admin123"}
+        "/api/auth/login", data={"username": "ca_tally_user", "password": "admin123"}
     )
     assert login_resp.status_code == 200
     token = login_resp.json()["access_token"]
@@ -108,9 +112,9 @@ def test_tally_xml_export_flow(client: TestClient, session: Session):
     tally_resp = client.get("/api/documents/export/tally", headers=headers)
     assert tally_resp.status_code == 200
     assert tally_resp.headers["content-type"].startswith("application/xml")
-    
+
     xml_content = tally_resp.text
     assert "<ENVELOPE>" in xml_content
-    assert "<VOUCHER VCHTYPE=\"Purchase\" ACTION=\"Create\">" in xml_content
+    assert '<VOUCHER VCHTYPE="Purchase" ACTION="Create">' in xml_content
     assert "<PARTYLEDGERNAME>Acme Supplies</PARTYLEDGERNAME>" in xml_content
     assert "INV-TALLY-001" in xml_content

@@ -1,19 +1,22 @@
+import io
 import json
 import os
 import tempfile
-import io
+
 import pandas as pd
 import streamlit as st
-from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
-from app.services.tally_exporter import tally_exporter
+from sqlmodel import Session, select
+
+from app.core.database import DocumentRecord, User, UserRole, engine, init_db
+from app.services.extractor_service import extractor_service
 from app.services.gstin_validator import gstin_validator
+from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
 
-from app.core.database import engine, DocumentRecord, User, UserRole, init_db
-from app.services.extractor_service import extractor_service
-
-st.set_page_config(page_title="DocuSync AI - Multi-Tenant Portal", page_icon="🔒", layout="wide")
+st.set_page_config(
+    page_title="DocuSync AI - Multi-Tenant Portal", page_icon="🔒", layout="wide"
+)
 init_db()
 
 # Session State Initialization
@@ -28,14 +31,16 @@ if "user" not in st.session_state:
 if not st.session_state.authenticated:
     st.title("🔒 DocuSync AI Sign In")
     col1, col2 = st.columns([1, 2])
-    
+
     with col1:
         username_input = st.text_input("Username")
         password_input = st.text_input("Password", type="password")
-        
+
         if st.button("Login", type="primary"):
             with Session(engine) as session:
-                user = session.exec(select(User).where(User.username == username_input)).first()
+                user = session.exec(
+                    select(User).where(User.username == username_input)
+                ).first()
                 if user and user.verify_password(password_input):
                     st.session_state.authenticated = True
                     st.session_state.user = user
@@ -43,33 +48,35 @@ if not st.session_state.authenticated:
                 else:
                     st.error("Invalid credentials.")
 
-        st.info("Demo Logins:\n- CA Admin: `ca_admin` / `admin123`\n- Client 1: `acme_corp` / `client123`\n- Client 2: `apex_tech` / `client123`")
+        st.info(
+            "Demo Logins:\n- CA Admin: `ca_admin` / `admin123`\n- Client 1: `acme_corp` / `client123`\n- Client 2: `apex_tech` / `client123`"
+        )
     st.stop()
 
 # ---------------------------------------------------------
 # AUTHENTICATED CONTEXT & RBAC SCOPING
 # ---------------------------------------------------------
 user: User = st.session_state.user
-is_admin: bool = (user.role == UserRole.CA_ADMIN)
+is_admin: bool = user.role == UserRole.CA_ADMIN
 
 # Sidebar & RBAC Scoped Metrics
 with st.sidebar:
     st.markdown(f"### 👤 Logged in: **{user.full_name}**")
     st.caption(f"Role: `{user.role}`")
-    
+
     if st.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.user = None
         st.rerun()
 
     st.divider()
-    
+
     # Enforce Isolated Query for Tenant Metrics
     with Session(engine) as session:
         query = select(DocumentRecord)
         if not is_admin:
             query = query.where(DocumentRecord.client_id == user.id)
-            
+
         records = session.exec(query).all()
 
         total_docs = len(records)
@@ -82,28 +89,32 @@ with st.sidebar:
     st.metric("Needs Review", review_count)
     st.metric("Rejected Flags", rejected_count)
 
-st.title(f"📄 DocuSync AI: {'CA Master Ledger' if is_admin else 'Client Document Portal'}")
+st.title(
+    f"📄 DocuSync AI: {'CA Master Ledger' if is_admin else 'Client Document Portal'}"
+)
 
-tab_ingest, tab_audit, tab_analytics = st.tabs([
-    "📤 Upload & Extract",
-    "📋 Audit Ledger",
-    "📊 Analytics"
-])
+tab_ingest, tab_audit, tab_analytics = st.tabs(
+    ["📤 Upload & Extract", "📋 Audit Ledger", "📊 Analytics"]
+)
 
 # ---------------------------------------------------------
 # TAB 1: UPLOAD & EXTRACT (RBAC Target Isolation)
 # ---------------------------------------------------------
 with tab_ingest:
     st.header("Upload Document")
-    
+
     # CA Admin can select target tenant; Client user is hard-locked to their own ID
     if is_admin:
         with Session(engine) as session:
-            clients = session.exec(select(User).where(User.role == UserRole.CLIENT)).all()
+            clients = session.exec(
+                select(User).where(User.role == UserRole.CLIENT)
+            ).all()
             client_options = {c.full_name: c.id for c in clients}
-            
+
         if client_options:
-            selected_client_name = st.selectbox("Assign Upload to Client Account", list(client_options.keys()))
+            selected_client_name = st.selectbox(
+                "Assign Upload to Client Account", list(client_options.keys())
+            )
             target_client_id = client_options[selected_client_name]
         else:
             st.warning("No client accounts found. Please seed client users.")
@@ -112,27 +123,32 @@ with tab_ingest:
         target_client_id = user.id
         st.caption(f"Target Account: **{user.full_name}** (ID: {user.id})")
 
-    uploaded_file = st.file_uploader("Choose a Tax Invoice or Bank Statement PDF", type=["pdf"])
+    uploaded_file = st.file_uploader(
+        "Choose a Tax Invoice or Bank Statement PDF", type=["pdf"]
+    )
 
     if uploaded_file is not None and target_client_id is not None:
         if st.button("Process & Save", type="primary"):
             with st.spinner("Processing & auditing document..."):
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".pdf"
+                ) as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
                     tmp_path = tmp_file.name
 
                 try:
                     result = extractor_service.process_document(
-                        file_path=tmp_path,
+                        file_input=tmp_path,
                         filename=uploaded_file.name,
-                        client_id=target_client_id
                     )
 
-                    st.success(f"Successfully processed and saved for Tenant ID #{target_client_id}!")
-                    st.json(result["data"])
+                    st.success(
+                        f"Successfully processed and saved for Tenant ID #{target_client_id}!"
+                    )
+                    st.json(result)
 
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                except (OSError, IOError, ValueError, RuntimeError) as e:
+                    st.error(f"Error: {e!s}")
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
@@ -142,13 +158,17 @@ with tab_ingest:
 # ---------------------------------------------------------
 with tab_audit:
     st.header("Document Audit Ledger")
-    
+
     # 1. QUICK GSTIN VERIFICATION TOOL (Top Placement)
     with st.expander("🔍 Quick GSTIN Verification Tool"):
-        st.caption("Verify any Vendor GSTIN format, state code, PAN extraction, and Modulus 36 checksum validity.")
+        st.caption(
+            "Verify any Vendor GSTIN format, state code, PAN extraction, and Modulus 36 checksum validity."
+        )
         col_gst_in, col_gst_btn = st.columns([3, 1])
-        input_gstin = col_gst_in.text_input("Enter GSTIN to Verify", value="27AAACT2727Q1ZW", key="quick_gstin_input")
-        
+        input_gstin = col_gst_in.text_input(
+            "Enter GSTIN to Verify", value="27AAACT2727Q1ZW", key="quick_gstin_input"
+        )
+
         if col_gst_btn.button("Verify GSTIN", type="secondary", key="quick_gstin_btn"):
             res = gstin_validator.verify_gstin(input_gstin)
             if res["valid"]:
@@ -161,18 +181,18 @@ with tab_audit:
 
     st.divider()
 
-    # 2. FILTER & EXPORT LAYOUT DEFINITION (Must be defined here!)
+    # 2. FILTER & EXPORT LAYOUT DEFINITION
     col_filter, col_export_csv, col_export_xlsx = st.columns([2, 1, 1])
     status_filter = col_filter.selectbox(
-        "Filter by Status", 
+        "Filter by Status",
         ["ALL", "REJECTED", "NEEDS_REVIEW", "VERIFIED"],
-        key="audit_status_filter"
+        key="audit_status_filter",
     )
 
     # 3. DATABASE QUERY & AUDIT LEDGER RENDER
     with Session(engine) as session:
         query = select(DocumentRecord).options(selectinload(DocumentRecord.owner))
-        
+
         if not is_admin:
             query = query.where(DocumentRecord.client_id == user.id)
 
@@ -191,31 +211,33 @@ with tab_audit:
             for r in records:
                 flags = json.loads(r.audit_flags_json) if r.audit_flags_json else []
                 flag_codes = ", ".join([f.get("code", "") for f in flags])
-                
-                export_rows.append({
-                    "Record ID": r.id,
-                    "Client Name": r.owner.full_name if r.owner else "Unassigned",
-                    "Filename": r.filename,
-                    "Document Type": r.document_type,
-                    "Invoice Number": r.invoice_number or "N/A",
-                    "Vendor Name": r.vendor_name or "N/A",
-                    "Total Amount (INR)": r.total_amount or 0.0,
-                    "Audit Status": r.overall_status,
-                    "Audit Flags": flag_codes or "None",
-                    "Auditor Notes": r.auditor_notes or "",
-                    "Created At": r.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                })
+
+                export_rows.append(
+                    {
+                        "Record ID": r.id,
+                        "Client Name": r.owner.full_name if r.owner else "Unassigned",
+                        "Filename": r.filename,
+                        "Document Type": r.document_type,
+                        "Invoice Number": r.invoice_number or "N/A",
+                        "Vendor Name": r.vendor_name or "N/A",
+                        "Total Amount (INR)": r.total_amount or 0.0,
+                        "Audit Status": r.overall_status,
+                        "Audit Flags": flag_codes or "None",
+                        "Auditor Notes": r.auditor_notes or "",
+                        "Created At": r.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+                )
 
             df_export = pd.DataFrame(export_rows)
 
             # CSV Stream
-            csv_data = df_export.to_csv(index=False).encode('utf-8')
+            csv_data = df_export.to_csv(index=False).encode("utf-8")
             col_export_csv.download_button(
                 label="📥 Export CSV",
                 data=csv_data,
                 file_name=f"docusync_audit_report_{status_filter.lower()}.csv",
                 mime="text/csv",
-                key="download_csv"
+                key="download_csv",
             )
 
             # Excel Stream
@@ -229,7 +251,7 @@ with tab_audit:
                 data=excel_data,
                 file_name=f"docusync_audit_report_{status_filter.lower()}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="download_xlsx"
+                key="download_xlsx",
             )
 
             st.divider()
@@ -238,24 +260,40 @@ with tab_audit:
             # RECORD EXPANDERS & CA AUDIT CONTROLS
             # -----------------------------------------------------
             for rec in records:
-                owner_label = f" | Client: {rec.owner.full_name if rec.owner else 'Unassigned'}" if is_admin else ""
-                
-                with st.expander(f"ID #{rec.id}{owner_label} | {rec.filename} | Status: {rec.overall_status}"):
+                owner_label = (
+                    f" | Client: {rec.owner.full_name if rec.owner else 'Unassigned'}"
+                    if is_admin
+                    else ""
+                )
+
+                with st.expander(
+                    f"ID #{rec.id}{owner_label} | {rec.filename} | Status: {rec.overall_status}"
+                ):
                     c1, c2, c3 = st.columns(3)
                     c1.write(f"**Type:** {rec.document_type}")
                     c2.write(f"**Invoice #:** {rec.invoice_number or 'N/A'}")
-                    c3.write(f"**Total:** ₹{rec.total_amount:,.2f}" if rec.total_amount else "**Total:** N/A")
+                    c3.write(
+                        f"**Total:** ₹{rec.total_amount:,.2f}"
+                        if rec.total_amount
+                        else "**Total:** N/A"
+                    )
 
                     st.markdown("**Audit Flags:**")
-                    flags = json.loads(rec.audit_flags_json) if rec.audit_flags_json else []
+                    flags = (
+                        json.loads(rec.audit_flags_json) if rec.audit_flags_json else []
+                    )
                     if not flags:
                         st.write("✓ Zero flags reported")
                     else:
                         for f in flags:
-                            st.caption(f"⚠️ [{f.get('severity')}] {f.get('code')}: {f.get('message')}")
+                            st.caption(
+                                f"⚠️ [{f.get('severity')}] {f.get('code')}: {f.get('message')}"
+                            )
 
                     st.markdown("**Structured Data:**")
-                    raw_json = json.loads(rec.raw_json_data) if rec.raw_json_data else {}
+                    raw_json = (
+                        json.loads(rec.raw_json_data) if rec.raw_json_data else {}
+                    )
                     st.json(raw_json)
 
                     if rec.overall_status == "VERIFIED":
@@ -269,7 +307,7 @@ with tab_audit:
                             data=tally_xml,
                             file_name=f"Tally_Voucher_ID_{rec.id}.xml",
                             mime="application/xml",
-                            key=f"tally_btn_{rec.id}"
+                            key=f"tally_btn_{rec.id}",
                         )
 
                         # Zoho Books CSV Export
@@ -279,37 +317,47 @@ with tab_audit:
                             data=zoho_csv,
                             file_name=f"Zoho_Bill_ID_{rec.id}.csv",
                             mime="text/csv",
-                            key=f"zoho_btn_{rec.id}"
+                            key=f"zoho_btn_{rec.id}",
                         )
-                        
+
                     if is_admin:
                         st.divider()
                         st.subheader("🛠️ Auditor Review & Override")
-                        
+
                         col_status, col_notes = st.columns([1, 2])
                         status_options = ["VERIFIED", "NEEDS_REVIEW", "REJECTED"]
-                        current_idx = status_options.index(rec.overall_status) if rec.overall_status in status_options else 0
-                        
+                        current_idx = (
+                            status_options.index(rec.overall_status)
+                            if rec.overall_status in status_options
+                            else 0
+                        )
+
                         new_status = col_status.selectbox(
                             "Override Status",
                             options=status_options,
                             index=current_idx,
-                            key=f"status_select_{rec.id}"
+                            key=f"status_select_{rec.id}",
                         )
-                        
+
                         existing_notes = rec.auditor_notes or ""
                         new_notes = col_notes.text_input(
                             "Auditor Notes / Reason for Change",
                             value=existing_notes,
-                            key=f"notes_input_{rec.id}"
+                            key=f"notes_input_{rec.id}",
                         )
-                        
-                        if st.button("Save Audit Decision", key=f"save_btn_{rec.id}", type="primary"):
+
+                        if st.button(
+                            "Save Audit Decision",
+                            key=f"save_btn_{rec.id}",
+                            type="primary",
+                        ):
                             rec.overall_status = new_status
                             rec.auditor_notes = new_notes
                             session.add(rec)
                             session.commit()
-                            st.success(f"Updated Record #{rec.id} status to '{new_status}'!")
+                            st.success(
+                                f"Updated Record #{rec.id} status to '{new_status}'!"
+                            )
                             st.rerun()
                     elif rec.auditor_notes:
                         st.divider()
@@ -324,7 +372,7 @@ with tab_analytics:
         query = select(DocumentRecord)
         if not is_admin:
             query = query.where(DocumentRecord.client_id == user.id)
-            
+
         all_records = session.exec(query).all()
 
     if all_records:

@@ -1,11 +1,10 @@
-from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "DocuSync AI"
     DEBUG: bool = True
-    GROQ_API_KEY: Optional[str] = ""
+    GROQ_API_KEY: str | None = ""
     OPENROUTER_API_KEY: str = ""
     PRIMARY_EXTRACTION_MODEL: str = "llama-3.3-70b-versatile"
     DATABASE_URL: str = "sqlite:///storage/docusync.db"
