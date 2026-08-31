@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 from sqlmodel import Session
+
 from app.core.database import DocumentRecord
 
 
@@ -8,7 +9,7 @@ from app.core.database import DocumentRecord
 async def test_portal_review_queue_and_override(
     async_client: AsyncClient, db_session: Session, seed_users: dict
 ):
-    admin = seed_users["admin"]
+    #admin = seed_users["admin"]
     client_a = seed_users["client_a"]
 
     doc = DocumentRecord(

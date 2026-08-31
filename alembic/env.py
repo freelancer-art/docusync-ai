@@ -1,9 +1,10 @@
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
+
+from alembic import context
 
 # Import database module to ensure all models register with SQLModel.metadata
 from app.core.database import DocumentRecord, User  # noqa: F401

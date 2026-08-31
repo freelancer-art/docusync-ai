@@ -69,7 +69,7 @@ def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str]:
         try:
             with open(file_input, "rb") as f:
                 file_bytes = f.read()
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.error(f"Failed to read file path {file_input}: {e}")
             return "", "FAILED"
     else:
@@ -85,13 +85,13 @@ def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str]:
             if isinstance(res, tuple):
                 return res[0], res[1]
             return res, "pdfplumber_or_ocr"
-        except (RuntimeError, ValueError, TypeError, IOError):
+        except (OSError, RuntimeError, ValueError, TypeError):
             try:
                 res = ocr_engine.extract_text(file_bytes)
                 if isinstance(res, tuple):
                     return res[0], res[1]
                 return res, "pdfplumber_or_ocr"
-            except (RuntimeError, ValueError, TypeError, IOError) as e:
+            except (OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.error(f"OCR engine extraction error: {e}")
 
     try:

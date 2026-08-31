@@ -30,13 +30,7 @@ class OCREngine:
                     text = page.extract_text()
                     if text:
                         extracted_text += text + "\n"
-        except (
-            pdfplumber.pdf.PDFSyntaxError,
-            OSError,
-            IOError,
-            ValueError,
-            TypeError,
-        ):
+        except (pdfplumber.pdf.PDFSyntaxError, OSError, ValueError, TypeError):
             extracted_text = ""
 
         # If text is empty or low character count, trigger OCR fallback
@@ -56,14 +50,7 @@ class OCREngine:
                     # Convert PDF page to high-res image for pytesseract
                     image = page.to_image(resolution=300).original
                     ocr_text += pytesseract.image_to_string(image) + "\n"
-        except (
-            pdfplumber.pdf.PDFSyntaxError,
-            pytesseract.TesseractError,
-            OSError,
-            IOError,
-            ValueError,
-            TypeError,
-        ):
+        except (pdfplumber.pdf.PDFSyntaxError, pytesseract.TesseractError, OSError, ValueError, TypeError):
             # Safely handle malformed PDF streams or unparseable files
             return ocr_text
 

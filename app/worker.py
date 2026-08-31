@@ -54,6 +54,5 @@ def process_document_task(self, doc_id: int, db_url: str | None = None):
                 "doc_id": doc.id,
                 "vendor": doc.vendor_name,
             }
-    except Exception as exc:
-        # Retry task on transient failures (e.g., API timeouts, DB disconnects)
+    except (RuntimeError, ValueError, OSError) as exc:
         raise self.retry(exc=exc)

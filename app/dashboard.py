@@ -127,31 +127,32 @@ with tab_ingest:
         "Choose a Tax Invoice or Bank Statement PDF", type=["pdf"]
     )
 
-    if uploaded_file is not None and target_client_id is not None:
-        if st.button("Process & Save", type="primary"):
-            with st.spinner("Processing & auditing document..."):
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".pdf"
-                ) as tmp_file:
-                    tmp_file.write(uploaded_file.getvalue())
-                    tmp_path = tmp_file.name
+if (
+        uploaded_file is not None and target_client_id is not None
+    ) and st.button("Process & Save", type="primary"):
+    with st.spinner("Processing & auditing document..."):
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".pdf"
+        ) as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_path = tmp_file.name
 
-                try:
-                    result = extractor_service.process_document(
-                        file_input=tmp_path,
-                        filename=uploaded_file.name,
-                    )
+        try:
+            result = extractor_service.process_document(
+                file_input=tmp_path,
+                filename=uploaded_file.name,
+            )
 
-                    st.success(
-                        f"Successfully processed and saved for Tenant ID #{target_client_id}!"
-                    )
-                    st.json(result)
+            st.success(
+                f"Successfully processed and saved for Tenant ID #{target_client_id}!"
+            )
+            st.json(result)
 
-                except (OSError, IOError, ValueError, RuntimeError) as e:
-                    st.error(f"Error: {e!s}")
-                finally:
-                    if os.path.exists(tmp_path):
-                        os.remove(tmp_path)
+        except (OSError, ValueError, RuntimeError) as e:
+            st.error(f"Error: {e!s}")
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 # ---------------------------------------------------------
 # TAB 2: AUDIT LEDGER (With Export Controls)

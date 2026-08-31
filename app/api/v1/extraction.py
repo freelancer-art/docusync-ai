@@ -1,6 +1,6 @@
 import os
-import aiofiles
 
+import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.core.rate_limiter import rate_limiter
@@ -31,7 +31,7 @@ async def process_document_auto(file: UploadFile = File(...)):
 
         result = extractor_service.process_document(file_path)
         return result
-    except (OSError, IOError, ValueError) as e:
+    except (OSError, ValueError) as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(file_path):

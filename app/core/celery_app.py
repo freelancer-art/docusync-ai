@@ -1,4 +1,5 @@
 import os
+
 from celery import Celery
 
 # Redis broker/backend configuration with defaults

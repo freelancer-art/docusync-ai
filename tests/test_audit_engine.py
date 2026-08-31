@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.services.gstin_validator import gstin_validator
 from app.services.tally_exporter import tally_exporter
@@ -20,7 +20,7 @@ class DummyDocumentRecord:
         self.vendor_name = vendor_name
         self.invoice_number = invoice_number
         self.total_amount = total_amount
-        self.created_at = datetime(2026, 8, 30, 12, 0, 0)
+        self.created_at = datetime(2026, 8, 30, 12, 0, 0, tzinfo=timezone.utc)
         self.raw_json_data = json.dumps(
             raw_data
             or {

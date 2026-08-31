@@ -1,7 +1,7 @@
 import json
 import os
-import aiofiles
 
+import aiofiles
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -61,7 +61,7 @@ def run_document_processing_pipeline(doc_id: int, db_engine: Engine | None = Non
                 doc.vendor_name = extracted_data.get("vendor_name")
                 doc.invoice_number = extracted_data.get("invoice_number")
                 doc.total_amount = extracted_data.get("total_amount", 0.0)
-            except (OSError, IOError, ValueError) as e:
+            except (OSError, ValueError) as e:
                 doc.overall_status = "FAILED"
                 doc.raw_json_data = json.dumps({"error": str(e)})
 
