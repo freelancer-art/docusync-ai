@@ -1,0 +1,98 @@
+.
+├── ./README.md
+├── ./__pycache__
+│   └── ./__pycache__/conftest.cpython-312-pytest-9.1.1.pyc
+├── ./app
+│   ├── ./app/__init__.py
+│   ├── ./app/__pycache__
+│   │   ├── ./app/__pycache__/__init__.cpython-312.pyc
+│   │   ├── ./app/__pycache__/config.cpython-312.pyc
+│   │   └── ./app/__pycache__/main.cpython-312.pyc
+│   ├── ./app/api
+│   │   ├── ./app/api/__init__.py
+│   │   ├── ./app/api/__pycache__
+│   │   │   ├── ./app/api/__pycache__/__init__.cpython-312.pyc
+│   │   │   └── ./app/api/__pycache__/documents.cpython-312.pyc
+│   │   ├── ./app/api/documents.py
+│   │   └── ./app/api/v1
+│   │       ├── ./app/api/v1/__init__.py
+│   │       ├── ./app/api/v1/__pycache__
+│   │       │   ├── ./app/api/v1/__pycache__/__init__.cpython-312.pyc
+│   │       │   └── ./app/api/v1/__pycache__/extraction.cpython-312.pyc
+│   │       ├── ./app/api/v1/extraction.py
+│   │       └── ./app/api/v1/router.py
+│   ├── ./app/config.py
+│   ├── ./app/core
+│   │   ├── ./app/core/__init__.py
+│   │   ├── ./app/core/__pycache__
+│   │   │   ├── ./app/core/__pycache__/__init__.cpython-312.pyc
+│   │   │   ├── ./app/core/__pycache__/database.cpython-312.pyc
+│   │   │   ├── ./app/core/__pycache__/ocr_engine.cpython-312.pyc
+│   │   │   └── ./app/core/__pycache__/security.cpython-312.pyc
+│   │   ├── ./app/core/database.py
+│   │   ├── ./app/core/groq_client.py
+│   │   ├── ./app/core/ocr_engine.py
+│   │   └── ./app/core/security.py
+│   ├── ./app/dashboard.py
+│   ├── ./app/main.py
+│   ├── ./app/schemas
+│   │   ├── ./app/schemas/__init__.py
+│   │   ├── ./app/schemas/__pycache__
+│   │   │   ├── ./app/schemas/__pycache__/__init__.cpython-312.pyc
+│   │   │   ├── ./app/schemas/__pycache__/bank_statement.cpython-312.pyc
+│   │   │   ├── ./app/schemas/__pycache__/document_type.cpython-312.pyc
+│   │   │   ├── ./app/schemas/__pycache__/tax_invoice.cpython-312.pyc
+│   │   │   └── ./app/schemas/__pycache__/verification.cpython-312.pyc
+│   │   ├── ./app/schemas/bank_statement.py
+│   │   ├── ./app/schemas/base.py
+│   │   ├── ./app/schemas/document.py
+│   │   ├── ./app/schemas/document_type.py
+│   │   ├── ./app/schemas/tax_invoice.py
+│   │   └── ./app/schemas/verification.py
+│   └── ./app/services
+│       ├── ./app/services/__init__.py
+│       ├── ./app/services/__pycache__
+│       │   ├── ./app/services/__pycache__/__init__.cpython-312.pyc
+│       │   ├── ./app/services/__pycache__/extractor_service.cpython-312.pyc
+│       │   ├── ./app/services/__pycache__/gstin_validator.cpython-312.pyc
+│       │   ├── ./app/services/__pycache__/tally_exporter.cpython-312.pyc
+│       │   ├── ./app/services/__pycache__/verification_service.cpython-312.pyc
+│       │   └── ./app/services/__pycache__/zoho_exporter.cpython-312.pyc
+│       ├── ./app/services/extractor_service.py
+│       ├── ./app/services/gstin_validator.py
+│       ├── ./app/services/parser.py
+│       ├── ./app/services/tally_exporter.py
+│       ├── ./app/services/verification_service.py
+│       └── ./app/services/zoho_exporter.py
+├── ./conftest.py
+├── ./folder_30082006.txt
+├── ./generate_test_pdf.py
+├── ./mcp_server.py
+├── ./notebooks
+│   └── ./notebooks/colab_ocr_experiment.ipynb
+├── ./pyproject.toml
+├── ./seed_test_data.py
+├── ./storage
+│   ├── ./storage/docusync.db
+│   ├── ./storage/extracted_outputs
+│   ├── ./storage/sample_uploads
+│   │   └── ./storage/sample_uploads/test_invoice.pdf
+│   └── ./storage/uploads
+│       └── ./storage/uploads/malicious_invoice.pdf
+├── ./test_extract.py
+├── ./test_phase3.py
+├── ./test_result.txt
+├── ./tests
+│   ├── ./tests/__init__.py
+│   ├── ./tests/__pycache__
+│   │   ├── ./tests/__pycache__/__init__.cpython-312.pyc
+│   │   ├── ./tests/__pycache__/conftest.cpython-312-pytest-9.1.1.pyc
+│   │   ├── ./tests/__pycache__/test_api_endpoints.cpython-312-pytest-9.1.1.pyc
+│   │   ├── ./tests/__pycache__/test_audit_engine.cpython-312-pytest-9.1.1.pyc
+│   │   └── ./tests/__pycache__/test_security_hardening.cpython-312-pytest-9.1.1.pyc
+│   ├── ./tests/test_api_endpoints.py
+│   ├── ./tests/test_audit_engine.py
+│   └── ./tests/test_security_hardening.py
+└── ./uv.lock
+
+21 directories, 75 files

@@ -4,10 +4,11 @@ rootdir: /home/amit/projects/docusync-ai
 configfile: pyproject.toml
 testpaths: tests
 plugins: anyio-4.14.2
-collected 23 items
+collected 24 items
 
-tests/test_api_endpoints.py ...                                          [ 13%]
-tests/test_audit_engine.py ......                                        [ 39%]
+tests/test_api_endpoints.py ..                                           [  8%]
+tests/test_audit_engine.py ......                                        [ 33%]
+tests/test_auth_and_exports.py ..                                        [ 41%]
 tests/test_security_hardening.py ..............                          [100%]
 
-============================== 23 passed in 7.20s ==============================
+============================== 24 passed in 2.08s ==============================

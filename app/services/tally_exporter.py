@@ -1,15 +1,10 @@
 import json
-from typing import Any
+from typing import Any, List
 from xml.sax.saxutils import escape
 
 class TallyExporterService:
-    """
-    Service for converting DocumentRecord instances into
-    Tally XML Purchase Voucher import format.
-    """
-
-    @classmethod
-    def generate_purchase_voucher_xml(cls, record: Any) -> str:
+    @staticmethod
+    def generate_purchase_voucher_xml(record: Any) -> str:
         raw_data = {}
         raw_str = getattr(record, "raw_json_data", None)
         if raw_str:
@@ -26,43 +21,46 @@ class TallyExporterService:
         created_at = getattr(record, "created_at", None)
         voucher_date = created_at.strftime("%Y%m%d") if created_at else "20260101"
 
-        xml_lines = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<ENVELOPE>',
-            '  <HEADER>',
-            '    <TALLYREQUEST>Import Data</TALLYREQUEST>',
-            '  </HEADER>',
-            '  <BODY>',
-            '    <IMPORTDATA>',
-            '      <REQUESTDESC>',
-            '        <REPORTNAME>Vouchers</REPORTNAME>',
-            '      </REQUESTDESC>',
-            '      <REQUESTDATA>',
-            '        <TALLYMESSAGE xmlns:UDF="TallyUDF">',
-            f'          <VOUCHER VCHTYPE="Purchase" ACTION="Create">',
-            f'            <DATE>{voucher_date}</DATE>',
-            f'            <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>',
-            f'            <REFERENCE>{invoice_num}</REFERENCE>',
-            f'            <PARTYLEDGERNAME>{vendor_name}</PARTYLEDGERNAME>',
-            f'            <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>',
-            '            <ALLLEDGERENTRIES.LIST>',
-            f'              <LEDGERNAME>{vendor_name}</LEDGERNAME>',
-            '              <ISDEEMEDPOSITIVE>NO</ISDEEMEDPOSITIVE>',
-            f'              <AMOUNT>{total_amount}</AMOUNT>',
-            '            </ALLLEDGERENTRIES.LIST>',
-            '            <ALLLEDGERENTRIES.LIST>',
-            '              <LEDGERNAME>Purchase Account</LEDGERNAME>',
-            '              <ISDEEMEDPOSITIVE>YES</ISDEEMEDPOSITIVE>',
-            f'              <AMOUNT>-{total_amount}</AMOUNT>',
-            '            </ALLLEDGERENTRIES.LIST>',
-            '          </VOUCHER>',
-            '        </TALLYMESSAGE>',
-            '      </REQUESTDATA>',
-            '    </IMPORTDATA>',
-            '  </BODY>',
-            '</ENVELOPE>'
-        ]
+        return f"""          <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+            <DATE>{voucher_date}</DATE>
+            <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
+            <REFERENCE>{invoice_num}</REFERENCE>
+            <PARTYLEDGERNAME>{vendor_name}</PARTYLEDGERNAME>
+            <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>{vendor_name}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>NO</ISDEEMEDPOSITIVE>
+              <AMOUNT>{total_amount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Purchase Account</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>YES</ISDEEMEDPOSITIVE>
+              <AMOUNT>-{total_amount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>"""
 
-        return "\n".join(xml_lines)
+    @classmethod
+    def generate_vouchers_xml(cls, records: List[Any]) -> str:
+        vouchers = [cls.generate_purchase_voucher_xml(rec) for rec in records]
+        vouchers_str = "\n".join(vouchers)
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+{vouchers_str}
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>"""
 
 tally_exporter = TallyExporterService()

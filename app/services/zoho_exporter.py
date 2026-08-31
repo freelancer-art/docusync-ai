@@ -12,8 +12,8 @@ class ZohoExporterService:
             return f"'{value}"
         return value
 
-    @classmethod
-    def generate_bills_csv(cls, records: List[Any]) -> bytes:
+    @staticmethod
+    def generate_bills_csv(records: List[Any]) -> bytes:
         rows: List[Dict[str, Any]] = []
 
         for rec in records:
@@ -33,17 +33,15 @@ class ZohoExporterService:
             bill_date = created_at.strftime("%Y-%m-%d") if created_at else ""
             due_date = bill_date
 
-            vendor_name = cls.sanitize_csv_field(getattr(rec, "vendor_name", None) or "Unassigned Vendor")
+            vendor_name = ZohoExporterService.sanitize_csv_field(getattr(rec, "vendor_name", None) or "Unassigned Vendor")
             
-            # Ensure None or empty IDs resolve to '0'
             rec_id = getattr(rec, "id", None)
             if rec_id is None:
                 rec_id = "0"
 
             invoice_no = getattr(rec, "invoice_number", None)
-            bill_number = cls.sanitize_csv_field(invoice_no if invoice_no else f"BILL-{rec_id}")
-            
-            vendor_gstin = cls.sanitize_csv_field(raw_data.get("vendor_gstin", raw_data.get("gstin", "")))
+            bill_number = ZohoExporterService.sanitize_csv_field(invoice_no if invoice_no else f"BILL-{rec_id}")
+            vendor_gstin = ZohoExporterService.sanitize_csv_field(raw_data.get("vendor_gstin", raw_data.get("gstin", "")))
             
             try:
                 total_amount = float(getattr(rec, "total_amount", 0.0) or 0.0)
@@ -55,7 +53,7 @@ class ZohoExporterService:
                     if not isinstance(item, dict):
                         continue
 
-                    desc = cls.sanitize_csv_field(item.get("description", cls.DEFAULT_ITEM_NAME))
+                    desc = ZohoExporterService.sanitize_csv_field(item.get("description", ZohoExporterService.DEFAULT_ITEM_NAME))
                     
                     try:
                         qty = float(item.get("quantity", 1))
@@ -83,7 +81,7 @@ class ZohoExporterService:
                         "Bill Number": bill_number,
                         "Bill Date": bill_date,
                         "Due Date": due_date,
-                        "Account": cls.DEFAULT_ACCOUNT_HEAD,
+                        "Account": ZohoExporterService.DEFAULT_ACCOUNT_HEAD,
                         "Item Name": desc,
                         "Item Description": desc,
                         "Quantity": qty,
@@ -93,15 +91,15 @@ class ZohoExporterService:
                         "Currency Code": "INR"
                     })
             else:
-                desc = cls.sanitize_csv_field(f"Invoice #{bill_number}")
+                desc = ZohoExporterService.sanitize_csv_field(f"Invoice #{bill_number}")
                 rows.append({
                     "Vendor Name": vendor_name,
                     "Vendor GSTIN": vendor_gstin,
                     "Bill Number": bill_number,
                     "Bill Date": bill_date,
                     "Due Date": due_date,
-                    "Account": cls.DEFAULT_ACCOUNT_HEAD,
-                    "Item Name": cls.DEFAULT_ITEM_NAME,
+                    "Account": ZohoExporterService.DEFAULT_ACCOUNT_HEAD,
+                    "Item Name": ZohoExporterService.DEFAULT_ITEM_NAME,
                     "Item Description": desc,
                     "Quantity": 1,
                     "Rate": total_amount,

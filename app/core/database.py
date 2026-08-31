@@ -3,7 +3,7 @@ import bcrypt
 from enum import Enum
 from datetime import datetime, timezone
 from typing import Optional, List
-from sqlmodel import SQLModel, Field, Relationship, create_engine, Session
+from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, select
 from pydantic import field_validator, ConfigDict
 
 DATABASE_DIR = "storage"
@@ -38,7 +38,6 @@ class User(SQLModel, table=True):
         return bcrypt.checkpw(pwd_bytes, hashed_bytes)
 
 class DocumentRecord(SQLModel, table=True):
-    # Enable Pydantic validation upon class instantiation and assignment
     model_config = ConfigDict(validate_assignment=True, revalidate_instances="always")
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -59,20 +58,21 @@ class DocumentRecord(SQLModel, table=True):
     def sanitize_filename(cls, v: str) -> str:
         if not v or not isinstance(v, str):
             return v
-        # Normalize Windows backslashes to forward slashes first
         clean = v.replace("\\", "/")
-        # Extract only the base filename to strip path traversal sequences
         return os.path.basename(clean)
 
     # Multi-tenancy link
     client_id: Optional[int] = Field(default=None, foreign_key="user.id")
     owner: Optional[User] = Relationship(back_populates="documents")
 
+def get_session():
+    with Session(engine) as session:
+        yield session
+
 def init_db():
     SQLModel.metadata.create_all(engine)
     
     with Session(engine) as session:
-        from sqlmodel import select
         existing_users = session.exec(select(User)).all()
         if not existing_users:
             ca_user = User(
