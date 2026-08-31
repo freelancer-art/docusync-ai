@@ -4,10 +4,10 @@ from fastapi.testclient import TestClient
 from app.core.rate_limiter import rate_limiter
 
 # Isolated app instance for testing limit enforcement
-test_app = FastAPI()
+rate_limit_app = FastAPI()
 
 
-@test_app.get(
+@rate_limit_app.get(
     "/test-limit",
     dependencies=[Depends(rate_limiter(requests_limit=3, window_seconds=60))],
 )
@@ -16,7 +16,7 @@ def limited_endpoint():
 
 
 def test_rate_limiter_enforcement():
-    client = TestClient(test_app)
+    client = TestClient(rate_limit_app)
 
     # First 3 requests must succeed
     for _ in range(3):
@@ -28,14 +28,3 @@ def test_rate_limiter_enforcement():
     assert blocked_res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
     assert blocked_res.json()["detail"] == "Rate limit exceeded. Please retry later."
     assert "Retry-After" in blocked_res.headers
-
-
-mock_app = FastAPI()
-
-
-@mock_app.get(
-    "/test-limit",
-    dependencies=[Depends(rate_limiter(requests_limit=3, window_seconds=60))],
-)
-def limited_endpoint():
-    return {"message": "success"}

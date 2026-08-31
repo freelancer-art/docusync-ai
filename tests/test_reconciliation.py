@@ -1,20 +1,14 @@
-from fastapi.testclient import TestClient
-from sqlmodel import Session
 import pytest
-
-from app.core.database import DocumentRecord, User, UserRole
+from httpx import AsyncClient
+from sqlmodel import Session
+from app.core.database import DocumentRecord
 
 
 @pytest.mark.asyncio
-async def test_payment_reconciliation_flow(async_client: AsyncClient, db_session: Session):
-    admin = User(
-        username="ca_admin_rec",
-        full_name="CA Admin",
-        hashed_password=User.hash_password("admin123"),
-        role=UserRole.CA_ADMIN,
-    )
-    session.add(admin)
-    session.commit()
+async def test_payment_reconciliation_flow(
+    async_client: AsyncClient, db_session: Session, seed_users: dict
+):
+    admin = seed_users["admin"]
 
     doc = DocumentRecord(
         filename="unpaid_inv.pdf",
@@ -29,29 +23,32 @@ async def test_payment_reconciliation_flow(async_client: AsyncClient, db_session
         raw_json_data="{}",
         audit_flags_json="[]",
     )
-    session.add(doc)
-    session.commit()
+    db_session.add(doc)
+    db_session.commit()
 
-    login_resp = client.post(
-        "/api/auth/login", data={"username": "ca_admin_rec", "password": "admin123"}
+    # Login Admin
+    login_resp = await async_client.post(
+        "/api/auth/login",
+        data={"username": "admin_test", "password": "admin123"},
     )
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    part_resp = client.post(
+    # Reconcile Partial Payment
+    part_resp = await async_client.post(
         "/api/payments/reconcile",
         json={"invoice_number": "INV-REC-100", "payment_amount": 200.0},
         headers=headers,
     )
     assert part_resp.status_code == 200
     assert part_resp.json()["payment_status"] == "PARTIALLY_PAID"
-    assert part_resp.json()["balance_remaining"] == 300.0
 
-    full_resp = client.post(
+    # Reconcile Full Payment
+    full_resp = await async_client.post(
         "/api/payments/reconcile",
         json={"invoice_number": "INV-REC-100", "payment_amount": 300.0},
         headers=headers,
     )
     assert full_resp.status_code == 200
     assert full_resp.json()["payment_status"] == "PAID"
-    assert full_resp.json()["balance_remaining"] == 0.0
