@@ -3,7 +3,7 @@ from app.config import settings
 from app.api.v1.extraction import router as extraction_router
 from app.api.documents import router as documents_router
 from app.api.auth import router as auth_router
-
+from app.api.client_portal import router as portal_router
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
 
@@ -12,7 +12,10 @@ app.include_router(extraction_router, prefix="/api/v1", tags=["Extraction Engine
 
 # New Security & Document Handling Router
 app.include_router(documents_router)
+# Authentication Router for User Management
 app.include_router(auth_router)
+# Portal Router for Client Access
+app.include_router(portal_router)
 
 @app.get("/")
 def read_root():
