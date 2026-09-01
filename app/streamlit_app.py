@@ -6,7 +6,13 @@ import requests
 import streamlit as st
 from sqlmodel import Session, select
 
-from app.core.database import DocumentRecord, engine
+# Inject Streamlit secrets into os.environ for Pydantic/SQLAlchemy compatibility
+if hasattr(st, "secrets"):
+    for key, val in st.secrets.items():
+        if isinstance(val, str):
+            os.environ[key] = val
+
+from app.core.database import DocumentRecord, engine, get_session, select, init_db
 
 # Page configuration
 st.set_page_config(
@@ -37,6 +43,8 @@ def render_pdf_preview(filename: str):
 
 
 def main():
+    # Ensure tables exist on Supabase before querying
+    init_db()
     st.title("📄 DocuSync Audit & Review Dashboard")
     st.caption("Human-in-the-loop review interface for financial document extractions.")
 

@@ -1,5 +1,7 @@
+from contextlib import asynccontextmanager
 import redis
 from fastapi import FastAPI, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlmodel import Session, select
 
@@ -9,12 +11,27 @@ from app.api.documents import router as documents_router
 from app.api.payments import router as payments_router
 from app.api.v1.extraction import router as extraction_router
 from app.config import settings
-from app.core.database import engine
+from app.core.database import engine, init_db
 from app.core.input_validation import PayloadSizeLimitMiddleware
 from app.core.logging import CorrelationIDMiddleware
 from app.core.middleware import setup_security_middleware
 
-app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize database tables and seed initial users on boot
+    init_db()
+    yield
+
+app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
+
+# Allow CORS for Streamlit Cloud and local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register Middleware (Payload size limit registered early)
 app.add_middleware(PayloadSizeLimitMiddleware)
