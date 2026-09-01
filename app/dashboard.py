@@ -6,7 +6,6 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.core.database import DocumentRecord, User, UserRole, engine, init_db
@@ -239,7 +238,7 @@ with tab_audit:
 
     # 3. DATABASE QUERY & AUDIT LEDGER RENDER
     with Session(engine) as session:
-        query = select(DocumentRecord).options(selectinload(DocumentRecord.owner))
+        query = select(DocumentRecord)
 
         if not is_admin:
             query = query.where(DocumentRecord.client_id == user.id)
@@ -257,6 +256,10 @@ with tab_audit:
                 flags = json.loads(r.audit_flags_json) if r.audit_flags_json else []
                 flag_codes = ", ".join([f.get("code", "") for f in flags])
 
+                # Fetch Client User directly
+                owner_user = session.get(User, r.client_id) if r.client_id else None
+                client_name = owner_user.full_name if owner_user else "Unassigned"
+
                 created_str = (
                     r.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     if getattr(r, "created_at", None)
@@ -266,7 +269,7 @@ with tab_audit:
                 export_rows.append(
                     {
                         "Record ID": r.id,
-                        "Client Name": r.owner.full_name if getattr(r, "owner", None) else "Unassigned",
+                        "Client Name": client_name,
                         "Filename": r.filename,
                         "Document Type": r.document_type,
                         "Invoice Number": r.invoice_number or "N/A",
@@ -309,7 +312,8 @@ with tab_audit:
 
             # RECORD EXPANDERS & CA AUDIT CONTROLS
             for rec in records:
-                owner_name = rec.owner.full_name if getattr(rec, "owner", None) else "Unassigned"
+                owner_user = session.get(User, rec.client_id) if rec.client_id else None
+                owner_name = owner_user.full_name if owner_user else "Unassigned"
                 owner_label = f" | Client: {owner_name}" if is_admin else ""
 
                 with st.expander(

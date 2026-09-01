@@ -30,7 +30,7 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
-    # Relationship to DocumentRecord
+    # Explicit relationship mapping to DocumentRecord
     documents: List["DocumentRecord"] = Relationship(back_populates="owner")
 
     def verify_password(self, password: str) -> bool:
@@ -69,7 +69,7 @@ class DocumentRecord(SQLModel, table=True):
     client_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
-    # Relationship to User model
+    # Explicit relationship mapping to User
     owner: Optional[User] = Relationship(back_populates="documents")
 
     def __init__(self, **data):
