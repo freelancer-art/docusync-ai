@@ -257,10 +257,16 @@ with tab_audit:
                 flags = json.loads(r.audit_flags_json) if r.audit_flags_json else []
                 flag_codes = ", ".join([f.get("code", "") for f in flags])
 
+                created_str = (
+                    r.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    if getattr(r, "created_at", None)
+                    else ""
+                )
+
                 export_rows.append(
                     {
                         "Record ID": r.id,
-                        "Client Name": r.owner.full_name if r.owner else "Unassigned",
+                        "Client Name": r.owner.full_name if getattr(r, "owner", None) else "Unassigned",
                         "Filename": r.filename,
                         "Document Type": r.document_type,
                         "Invoice Number": r.invoice_number or "N/A",
@@ -269,9 +275,7 @@ with tab_audit:
                         "Audit Status": r.overall_status,
                         "Audit Flags": flag_codes or "None",
                         "Auditor Notes": r.auditor_notes or "",
-                        "Created At": r.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                        if r.created_at
-                        else "",
+                        "Created At": created_str,
                     }
                 )
 
@@ -305,11 +309,8 @@ with tab_audit:
 
             # RECORD EXPANDERS & CA AUDIT CONTROLS
             for rec in records:
-                owner_label = (
-                    f" | Client: {rec.owner.full_name if rec.owner else 'Unassigned'}"
-                    if is_admin
-                    else ""
-                )
+                owner_name = rec.owner.full_name if getattr(rec, "owner", None) else "Unassigned"
+                owner_label = f" | Client: {owner_name}" if is_admin else ""
 
                 with st.expander(
                     f"ID #{rec.id}{owner_label} | {rec.filename} | Status: {rec.overall_status}"

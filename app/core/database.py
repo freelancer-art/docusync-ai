@@ -1,8 +1,9 @@
+from datetime import datetime
 import os
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 from passlib.context import CryptContext
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -11,10 +12,8 @@ def safe_truncate_password(password: str) -> str:
     """Truncates string to maximum 72 bytes safely for Bcrypt."""
     if not password:
         return ""
-    # If the input is already a hashed Bcrypt string, return as is
     if password.startswith("$2b$") or password.startswith("$2a$"):
         return password
-    # Encode to UTF-8, slice to max 72 bytes, and decode safely back
     pwd_bytes = password.encode("utf-8")[:72]
     return pwd_bytes.decode("utf-8", errors="ignore")
 
@@ -31,6 +30,9 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
+    # Relationship to DocumentRecord
+    documents: List["DocumentRecord"] = Relationship(back_populates="owner")
+
     def verify_password(self, password: str) -> bool:
         if not self.hashed_password:
             return False
@@ -44,7 +46,6 @@ class User(SQLModel, table=True):
     def hash_password(password: str) -> str:
         if not password:
             return ""
-        # Avoid re-hashing if the value is already a hashed string
         if password.startswith("$2b$") or password.startswith("$2a$"):
             return password
         truncated_pwd = safe_truncate_password(password)
@@ -66,6 +67,10 @@ class DocumentRecord(SQLModel, table=True):
     raw_json_data: Optional[str] = None
     auditor_notes: Optional[str] = None
     client_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
+    # Relationship to User model
+    owner: Optional[User] = Relationship(back_populates="documents")
 
     def __init__(self, **data):
         if "filename" in data and data["filename"]:
