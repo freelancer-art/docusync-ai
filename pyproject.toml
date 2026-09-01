@@ -30,6 +30,7 @@ dependencies = [
     "sqlmodel>=0.0.42",
     "streamlit>=1.62.0",
     "uvicorn>=0.52.4",
+    "psycopg2-binary>=2.9.9",
 ]
 
 [project.optional-dependencies]

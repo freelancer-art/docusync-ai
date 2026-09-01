@@ -7,12 +7,20 @@ from pydantic import ConfigDict, field_validator
 from sqlalchemy import Index
 from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
 
+from app.config import settings
+
 DATABASE_DIR = "storage"
 os.makedirs(DATABASE_DIR, exist_ok=True)
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_DIR}/docusync.db")
 
-connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+# Determine driver arguments dynamically based on database type
+is_sqlite = settings.SQLALCHEMY_DATABASE_URI.startswith("sqlite")
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+
+engine = create_engine(
+    settings.SQLALCHEMY_DATABASE_URI,
+    connect_args=connect_args,
+    echo=False,
+)
 
 
 class UserRole(str, Enum):
