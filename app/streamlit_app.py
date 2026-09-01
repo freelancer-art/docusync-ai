@@ -2,7 +2,6 @@ import base64
 import json
 import os
 
-import requests
 import streamlit as st
 from sqlmodel import Session, select
 
@@ -12,7 +11,7 @@ if hasattr(st, "secrets"):
         if isinstance(val, str):
             os.environ[key] = val
 
-from app.core.database import DocumentRecord, engine, get_session, select, init_db
+from app.core.database import DocumentRecord, User, UserRole, engine, init_db
 
 # Page configuration
 st.set_page_config(
@@ -28,7 +27,7 @@ def render_pdf_preview(filename: str):
     """Renders PDF directly inside Streamlit using base64 HTML embedding."""
     file_path = os.path.join(UPLOAD_DIR, filename)
     if not os.path.exists(file_path):
-        st.warning(f"Source file `{filename}` not found on disk.")
+        st.info(f"Source file `{filename}` preview not cached locally.")
         return
 
     with open(file_path, "rb") as f:
@@ -42,15 +41,68 @@ def render_pdf_preview(filename: str):
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 
+def login_screen():
+    """Dynamic DB-backed login interface."""
+    st.title("📄 DocuSync Audit & Review Portal")
+    st.subheader("Sign In")
+    
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Log In")
+
+            if submit:
+                if not username or not password:
+                    st.error("Please enter both username and password.")
+                    return
+
+                with Session(engine) as session:
+                    user = session.exec(
+                        select(User).where(User.username == username)
+                    ).first()
+
+                    if user and user.verify_password(password):
+                        st.session_state["authenticated"] = True
+                        st.session_state["user_id"] = user.id
+                        st.session_state["username"] = user.username
+                        st.session_state["full_name"] = user.full_name
+                        st.session_state["user_role"] = user.role
+                        st.success("Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password.")
+
+
 def main():
-    # Ensure tables exist on Supabase before querying
+    # Ensure tables exist on database before running queries
     init_db()
+
+    # Session Authentication Guard
+    if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
+        login_screen()
+        return
+
+    # Sidebar Header & User Profile
+    st.sidebar.title(f"👤 {st.session_state.get('full_name', 'User')}")
+    st.sidebar.caption(f"Role: `{st.session_state.get('user_role', 'GUEST')}`")
+    
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
+
     st.title("📄 DocuSync Audit & Review Dashboard")
     st.caption("Human-in-the-loop review interface for financial document extractions.")
 
     # Top-level KPI Summary
     with Session(engine) as session:
-        all_docs = session.exec(select(DocumentRecord)).all()
+        query = select(DocumentRecord)
+        # If logged in user is a CLIENT, limit view to their documents
+        if st.session_state.get("user_role") == UserRole.CLIENT:
+            query = query.where(DocumentRecord.client_id == st.session_state.get("user_id"))
+
+        all_docs = session.exec(query).all()
         total_count = len(all_docs)
         needs_review_count = sum(
             1 for d in all_docs if d.overall_status == "NEEDS_REVIEW"
@@ -74,6 +126,8 @@ def main():
 
     with Session(engine) as session:
         query = select(DocumentRecord)
+        if st.session_state.get("user_role") == UserRole.CLIENT:
+            query = query.where(DocumentRecord.client_id == st.session_state.get("user_id"))
         if status_filter != "ALL":
             query = query.where(DocumentRecord.overall_status == status_filter)
         records = session.exec(query).all()
@@ -132,10 +186,12 @@ def main():
                     value=float(doc.total_amount or 0.0),
                     step=0.01,
                 )
+                
+                current_payment_status = doc.payment_status if doc.payment_status in ["UNPAID", "PAID", "PARTIAL"] else "UNPAID"
                 payment_status = st.selectbox(
                     "Payment Status",
                     ["UNPAID", "PAID", "PARTIAL"],
-                    index=["UNPAID", "PAID", "PARTIAL"].index(doc.payment_status),
+                    index=["UNPAID", "PAID", "PARTIAL"].index(current_payment_status),
                 )
                 auditor_notes = st.text_area(
                     "Auditor Notes", value=doc.auditor_notes or ""

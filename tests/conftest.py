@@ -8,6 +8,14 @@ from sqlmodel import Session, SQLModel, create_engine, delete
 from app.core.database import DocumentRecord, User, UserRole, get_session
 from app.main import app
 
+import bcrypt
+
+# Workaround for passlib + bcrypt >= 4.0.0 compatibility
+if not hasattr(bcrypt, "__about__"):
+    class About:
+        __version__ = getattr(bcrypt, "__version__", "4.0.1")
+    bcrypt.__about__ = About()
+
 TEST_DATABASE_URL = "sqlite:///./storage/test_docusync.db"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 
@@ -19,7 +27,10 @@ def setup_test_db():
     yield
     SQLModel.metadata.drop_all(engine)
     if os.path.exists("./storage/test_docusync.db"):
-        os.remove("./storage/test_docusync.db")
+        try:
+            os.remove("./storage/test_docusync.db")
+        except OSError:
+            pass
 
 
 @pytest.fixture
@@ -52,9 +63,7 @@ def seed_users(db_session: Session):
         role=UserRole.CLIENT,
     )
 
-    db_session.add(admin)
-    db_session.add(client_a)
-    db_session.add(client_b)
+    db_session.add_all([admin, client_a, client_b])
     db_session.commit()
 
     db_session.refresh(admin)

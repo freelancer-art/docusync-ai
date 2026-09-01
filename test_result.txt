@@ -1,0 +1,59 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/amit/projects/docusync-ai/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/amit/projects/docusync-ai
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.14.2, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 41 items
+
+tests/test_api_and_rbac.py::test_health_check PASSED                     [  2%]
+tests/test_api_and_rbac.py::test_tenant_isolation_rules PASSED           [  4%]
+tests/test_api_and_rbac.py::test_filename_sanitization PASSED            [  7%]
+tests/test_api_endpoints.py::test_upload_document_creates_db_record PASSED [  9%]
+tests/test_api_endpoints.py::test_multitenant_access_control PASSED      [ 12%]
+tests/test_audit_engine.py::test_gstin_valid_maharashtra PASSED          [ 14%]
+tests/test_audit_engine.py::test_gstin_invalid_checksum PASSED           [ 17%]
+tests/test_audit_engine.py::test_gstin_invalid_length PASSED             [ 19%]
+tests/test_audit_engine.py::test_gstin_whitespace_sanitization PASSED    [ 21%]
+tests/test_audit_engine.py::test_zoho_exporter_csv_generation PASSED     [ 24%]
+tests/test_audit_engine.py::test_tally_exporter_xml_structure PASSED     [ 26%]
+tests/test_auth_and_exports.py::test_login_and_jwt_export_flow PASSED    [ 29%]
+tests/test_auth_and_exports.py::test_tally_xml_export_flow PASSED        [ 31%]
+tests/test_celery_worker.py::test_process_document_task_missing_doc PASSED [ 34%]
+tests/test_celery_worker.py::test_process_document_task_missing_file PASSED [ 36%]
+tests/test_celery_worker.py::test_process_document_task_successful_execution PASSED [ 39%]
+tests/test_client_portal.py::test_portal_review_queue_and_override PASSED [ 41%]
+tests/test_input_validation.py::test_payload_within_limit_succeeds PASSED [ 43%]
+tests/test_input_validation.py::test_payload_exceeding_limit_rejected PASSED [ 46%]
+tests/test_logging.py::test_correlation_id_generated_if_missing PASSED   [ 48%]
+tests/test_logging.py::test_correlation_id_propagated_if_provided PASSED [ 51%]
+tests/test_logging.py::test_structured_log_formatter PASSED              [ 53%]
+tests/test_rate_limiter.py::test_rate_limiter_enforcement PASSED         [ 56%]
+tests/test_reconciliation.py::test_payment_reconciliation_flow PASSED    [ 58%]
+tests/test_security_hardening.py::test_gstin_validator_xss_and_sql_injection PASSED [ 60%]
+tests/test_security_hardening.py::test_malformed_json_resilience PASSED  [ 63%]
+tests/test_security_hardening.py::test_sql_injection_prevention_in_queries PASSED [ 65%]
+tests/test_security_hardening.py::test_rbac_client_isolation PASSED      [ 68%]
+tests/test_security_hardening.py::test_filename_path_traversal_prevention PASSED [ 70%]
+tests/test_security_hardening.py::test_csv_formula_injection_prevention PASSED [ 73%]
+tests/test_security_hardening.py::test_monetary_edge_cases_zero_and_negative PASSED [ 75%]
+tests/test_security_hardening.py::test_monetary_floating_point_precision PASSED [ 78%]
+tests/test_security_hardening.py::test_missing_optional_fields_resilience PASSED [ 80%]
+tests/test_security_hardening.py::test_malformed_json_types_in_line_items PASSED [ 82%]
+tests/test_security_hardening.py::test_valid_pdf_magic_bytes PASSED      [ 85%]
+tests/test_security_hardening.py::test_valid_image_magic_bytes PASSED    [ 87%]
+tests/test_security_hardening.py::test_reject_executable_disguised_as_pdf PASSED [ 90%]
+tests/test_security_hardening.py::test_reject_empty_file PASSED          [ 92%]
+tests/test_security_headers.py::test_security_headers_present PASSED     [ 95%]
+tests/test_security_headers.py::test_cors_allowed_origin PASSED          [ 97%]
+tests/test_security_headers.py::test_cors_disallowed_origin PASSED       [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /home/amit/projects/docusync-ai/.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 41 passed, 1 warning in 15.05s ========================

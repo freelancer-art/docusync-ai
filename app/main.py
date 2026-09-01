@@ -19,7 +19,10 @@ from app.core.middleware import setup_security_middleware
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database tables and seed initial users on boot
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning: init_db failed on startup: {e}")
     yield
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
@@ -94,3 +97,7 @@ def readiness_probe(response: Response):
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     return {"status": "ready" if is_ready else "not_ready", "checks": checks}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,26 +1,22 @@
 import os
-from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
+from passlib.context import CryptContext
+from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-import bcrypt
-from pydantic import ConfigDict, field_validator
-from sqlalchemy import Index
-from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-from app.config import settings
 
-DATABASE_DIR = "storage"
-os.makedirs(DATABASE_DIR, exist_ok=True)
-
-# Determine driver arguments dynamically based on database type
-is_sqlite = settings.SQLALCHEMY_DATABASE_URI.startswith("sqlite")
-connect_args = {"check_same_thread": False} if is_sqlite else {}
-
-engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
-    connect_args=connect_args,
-    echo=False,
-)
+def safe_truncate_password(password: str) -> str:
+    """Truncates string to maximum 72 bytes safely for Bcrypt."""
+    if not password:
+        return ""
+    # If the input is already a hashed Bcrypt string, return as is
+    if password.startswith("$2b$") or password.startswith("$2a$"):
+        return password
+    # Encode to UTF-8, slice to max 72 bytes, and decode safely back
+    pwd_bytes = password.encode("utf-8")[:72]
+    return pwd_bytes.decode("utf-8", errors="ignore")
 
 
 class UserRole(str, Enum):
@@ -29,64 +25,72 @@ class UserRole(str, Enum):
 
 
 class User(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     full_name: str
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    documents: list["DocumentRecord"] = Relationship(back_populates="owner")
+    def verify_password(self, password: str) -> bool:
+        if not self.hashed_password:
+            return False
+        truncated_pwd = safe_truncate_password(password)
+        try:
+            return pwd_context.verify(truncated_pwd, self.hashed_password)
+        except Exception:
+            return False
 
     @staticmethod
     def hash_password(password: str) -> str:
-        pwd_bytes = password.encode("utf-8")
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
-
-    def verify_password(self, password: str) -> bool:
-        pwd_bytes = password.encode("utf-8")
-        hashed_bytes = self.hashed_password.encode("utf-8")
-        return bcrypt.checkpw(pwd_bytes, hashed_bytes)
+        if not password:
+            return ""
+        # Avoid re-hashing if the value is already a hashed string
+        if password.startswith("$2b$") or password.startswith("$2a$"):
+            return password
+        truncated_pwd = safe_truncate_password(password)
+        return pwd_context.hash(truncated_pwd)
 
 
 class DocumentRecord(SQLModel, table=True):
-    __table_args__ = (
-        Index("ix_doc_client_status", "client_id", "overall_status"),
-        Index("ix_doc_created_at", "created_at"),
-    )
-
-    model_config = ConfigDict(validate_assignment=True, revalidate_instances="always")
-
-    id: int | None = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
     filename: str
-    document_type: str
-    extraction_method: str
-    overall_status: str  # VERIFIED, NEEDS_REVIEW, REJECTED
-    vendor_name: str | None = None
-    invoice_number: str | None = None
-    total_amount: float | None = None
-    raw_json_data: str = Field(default="{}")
-    audit_flags_json: str = Field(default="[]")
-    auditor_notes: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    document_type: str = "INVOICE"
+    extraction_method: str = "AI_VISION"
+    overall_status: str = "NEEDS_REVIEW"
+    vendor_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    total_amount: Optional[float] = 0.0
+    amount_paid: Optional[float] = 0.0
+    payment_status: str = "UNPAID"
+    audit_flags_json: Optional[str] = "[]"
+    raw_json_data: Optional[str] = None
+    auditor_notes: Optional[str] = None
+    client_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
-    # Payment Reconciliation Fields
-    payment_status: str = Field(default="UNPAID")
-    amount_paid: float = Field(default=0.0)
-    due_date: str | None = None
+    def __init__(self, **data):
+        if "filename" in data and data["filename"]:
+            data["filename"] = self.sanitize_filename(data["filename"])
+        super().__init__(**data)
 
-    # Multi-tenancy link
-    client_id: int | None = Field(default=None, foreign_key="user.id", index=True)
-    owner: User | None = Relationship(back_populates="documents")
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        if not filename:
+            return "unnamed_document"
+        clean_name = os.path.basename(filename.replace("\\", "/"))
+        clean_name = clean_name.replace("..", "").strip()
+        return clean_name or "unnamed_document"
 
-    @field_validator("filename", mode="before")
-    @classmethod
-    def sanitize_filename(cls, v: str) -> str:
-        if not v or not isinstance(v, str):
-            return v
-        clean = v.replace("\\", "/")
-        return os.path.basename(clean)
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./docusync.db")
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    echo=False,
+)
 
 
 def get_session():
@@ -98,27 +102,16 @@ def init_db():
     SQLModel.metadata.create_all(engine)
 
     with Session(engine) as session:
-        existing_users = session.exec(select(User)).all()
-        if not existing_users:
-            ca_user = User(
-                username="ca_admin",
-                full_name="Mehta & Co. CAs",
-                hashed_password=User.hash_password("admin123"),
+        existing_user = session.exec(select(User)).first()
+        if not existing_user:
+            default_username = os.getenv("INITIAL_CA_USERNAME", "ca_admin")
+            default_password = os.getenv("INITIAL_CA_PASSWORD", "Admin@123456")
+
+            initial_admin = User(
+                username=default_username,
+                full_name="Default CA Administrator",
+                hashed_password=User.hash_password(default_password),
                 role=UserRole.CA_ADMIN,
             )
-            client_user1 = User(
-                username="acme_corp",
-                full_name="Acme Trading Ltd.",
-                hashed_password=User.hash_password("client123"),
-                role=UserRole.CLIENT,
-            )
-            client_user2 = User(
-                username="apex_tech",
-                full_name="Apex Solutions",
-                hashed_password=User.hash_password("client123"),
-                role=UserRole.CLIENT,
-            )
-            session.add(ca_user)
-            session.add(client_user1)
-            session.add(client_user2)
+            session.add(initial_admin)
             session.commit()
