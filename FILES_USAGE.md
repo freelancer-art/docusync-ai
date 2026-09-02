@@ -1,5 +1,3 @@
-
-```markdown
 # File Usage & Module Reference 📚
 
 This document outlines the responsibility and integration role of every file in the **DocuSync AI** repository[cite: 14].
@@ -44,7 +42,7 @@ This document outlines the responsibility and integration role of every file in 
   Document text extraction engine using `pdfplumber` for digital PDFs with fallback to `pytesseract` and `poppler` for scanned images[cite: 14].
 
 * **`app/core/groq_client.py`**[cite: 14]
-  LLM client wrapper utilizing `instructor` to enforce structured JSON schema extractions via Groq / OpenRouter APIs[cite: 14].
+  LLM client wrapper utilizing `instructor` to enforce structured JSON schema extractions via Groq or Google Gemini APIs[cite: 14].
 
 ---
 
@@ -76,7 +74,7 @@ This document outlines the responsibility and integration role of every file in 
   Deterministic audit engine that validates line-item math, cross-checks GST totals, validates GSTIN patterns, and computes severity levels[cite: 14].
 
 * **`app/services/extractor_service.py`**[cite: 14]
-  High-level extraction orchestrator coordinating OCR parsing, auto-classification, and schema extraction[cite: 14].
+  High-level extraction orchestrator coordinating OCR parsing, image-to-PDF rendering (`pypdfium2`), auto-classification, and vision-enabled LLM schema extractions[cite: 13, 14].
 
 * **`app/services/gstin_validator.py`**[cite: 14]
   Regex pattern and state-code checksum validator for Indian GSTINs[cite: 14].
@@ -100,6 +98,9 @@ This document outlines the responsibility and integration role of every file in 
 * **`tests/test_audit_engine.py`**[cite: 14]
   Unit tests verifying deterministic mathematical audit rules and GST checks[cite: 14].
 
+* **`tests/test_extractor_service.py`**
+  Unit tests verifying image rendering, fallback mechanisms, confidence scoring, and structured extraction models.
+
 * **`tests/test_reconciliation.py`**
   Tests validating payment reconciliation field calculations and database persistence[cite: 10].
 
@@ -120,5 +121,3 @@ This document outlines the responsibility and integration role of every file in 
 
 * **`generate_test_pdf.py`**[cite: 14]
   Utility script to generate synthetic test PDFs for local manual testing[cite: 14].
-
-```

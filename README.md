@@ -1,10 +1,3 @@
-Here are the updated `README.md` and `FILE_USAGE.md` files reflecting the updated security hardening, payment reconciliation features, background worker test isolation fixes, environment config resiliency, and CI pipeline setup.
-
----
-
-### `README.md`
-
-```markdown
 # DocuSync AI 📄🤖
 
 **DocuSync AI** is an enterprise-grade, multi-document extraction, classification, verification, and payment reconciliation platform built for Chartered Accountants (CAs), tax consultants, and financial advisory practices[cite: 14].
@@ -34,8 +27,8 @@ It automates file ingestion, document type classification, OCR fallback processi
 
 * **Language Runtime:** Python 3.12 (managed via `uv`)[cite: 10, 14]
 * **Web Framework:** FastAPI (REST API) & Streamlit (UI Dashboard)[cite: 14]
-* **LLM Engine & Schemas:** Groq API / OpenRouter API with `instructor` for strict Pydantic JSON schema generation[cite: 14]
-* **Document Processing:** `pdfplumber` (native PDFs) & `pytesseract` / `poppler-utils` (scanned PDFs)[cite: 14]
+* **LLM Engine & Schemas:** Groq API / Google Gemini API with `instructor` for strict Pydantic JSON schema generation[cite: 14]
+* **Document Processing:** `pdfplumber` (native PDFs), `pypdfium2` (rendering), & `pytesseract` / `poppler-utils` (scanned PDFs)[cite: 13, 14]
 * **Database ORM:** SQLModel (SQLite)[cite: 10, 14]
 * **Testing & Quality Gates:** Pytest & GitHub Actions CI[cite: 10, 14]
 
@@ -56,7 +49,7 @@ docusync-ai/
 │   │   └── documents.py             # Document upload, RBAC, background worker & export routes
 │   ├── core/                        # Core infrastructure & engines
 │   │   ├── database.py              # SQLModel schemas (User, DocumentRecord) & engine init
-│   │   ├── groq_client.py          # Structured LLM extractor wrapper
+│   │   ├── groq_client.py          # Structured LLM extractor wrapper (Groq & Gemini)
 │   │   ├── ocr_engine.py            # Tesseract & pdfplumber extraction engine
 │   │   └── security.py              # Magic byte file validation & security rules
 │   ├── schemas/                     # Pydantic JSON schemas
@@ -83,6 +76,7 @@ docusync-ai/
 │   ├── test_audit_engine.py        # Audit verification rule tests
 │   ├── test_auth_and_exports.py    # Exporter and auth helper tests
 │   ├── test_client_portal.py       # Multi-tenant view tests
+│   ├── test_extractor_service.py   # Multi-modal extraction and fallback unit tests
 │   ├── test_reconciliation.py      # Payment reconciliation tests
 │   └── test_security_hardening.py  # Security, path traversal & payload resilience tests
 ├── conftest.py                      # Global Pytest fixtures & isolated in-memory DB configuration
@@ -124,8 +118,10 @@ Create a `.env` file in the root directory:
 APP_NAME="DocuSync AI"
 DEBUG=True
 GROQ_API_KEY="your_actual_groq_api_key_here"
+GEMINI_API_KEY="your_actual_gemini_api_key_here"
 SECRET_KEY="your_custom_secure_jwt_secret_key"
 PRIMARY_EXTRACTION_MODEL="llama-3.3-70b-versatile"
+VISION_EXTRACTION_MODEL="gemini-2.5-flash"
 DATABASE_URL="sqlite:///storage/docusync.db"
 
 ```
@@ -141,23 +137,14 @@ uv run pytest -v
 
 ```
 
-### Test Coverage Highlights (26/26 Passing):
+### Test Coverage Highlights:
 
 * **Upload Security & Magic Bytes:** Rejects disguised executable payloads by checking file byte signatures.
-
-
 * **Path Traversal Shielding:** Strips relative path markers (`../`) from uploaded filenames.
-
-
 * **Multi-Tenant Isolation (RBAC):** Restricts client access to authorized client IDs while allowing broad CA admin oversight.
-
-
 * **Payment Reconciliation:** Verifies accuracy of amount updates and status changes (`UNPAID`, `PARTIAL`, `PAID`).
-
-
 * **Export Escaping:** Prevents CSV formula injection attacks (`=`, `+`, `-`, `@`) in exported financial streams.
-
-
+* **Extractor & Vision Pipelines:** Verifies fallback handling, structured schema conversions, and multi-modal array inputs.
 
 ---
 
@@ -173,19 +160,6 @@ uv run uvicorn app.main:app --reload
 ```
 
 Access Swagger API docs at **`http://127.0.0.1:8000/docs`**.
-
-* **`POST /api/documents/upload`**: Validates magic bytes, sanitizes filename, creates `DocumentRecord`, and queues background processing.
-
-
-* **`GET /api/documents/{id}`**: RBAC-protected document detail retrieval.
-
-
-* **`GET /api/documents/export/zoho`**: Streams Zoho Books-compatible CSV file.
-
-
-* **`GET /api/documents/export/tally`**: Streams Tally XML accounting voucher file.
-
-
 
 ---
 
@@ -221,21 +195,19 @@ uv run python mcp_server.py
 * [x] **Phase 2:** OCR Fallback Pipeline (Tesseract) & Auto-Classification Router.
 
 
-* [x] **Phase 3:** Deterministic Rule Audit Engine (GSTIN regex & math verification).
+* [x] **Phase 3:** Vision Extraction & Structured Output Pipeline (`extractor_service.py`, `pypdfium2`, Gemini fallback).
 
 
-* [x] **Phase 4:** SQLModel Database Persistence & FastMCP Server integration.
+* [x] **Phase 4:** Deterministic Rule Audit Engine (GSTIN regex & math verification).
 
 
-* [x] **Phase 5:** Payment Reconciliation Tracking (`payment_status`, `amount_paid`, `due_date`).
+* [x] **Phase 5:** SQLModel Database Persistence & FastMCP Server integration.
 
 
-* [x] **Phase 6:** API Security Hardening (Magic Bytes, Path Traversal, CSV Escaping, Pytest & GitHub Actions CI).
+* [x] **Phase 6:** Payment Reconciliation Tracking (`payment_status`, `amount_paid`, `due_date`).
 
 
-* [ ] **Phase 7:** Live Vision Fallback Pipelines & Webhook Processing Notifications.
+* [x] **Phase 7:** API Security Hardening (Magic Bytes, Path Traversal, CSV Escaping, Pytest & GitHub Actions CI).
+
+
 * [ ] **Phase 8:** Async Queue Workers (Celery/Redis) & Production Docker Packaging.
-
-```
-
----

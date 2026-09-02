@@ -32,8 +32,8 @@ def get_gemini_client() -> Instructor | None:
         return None
     try:
         raw_client = genai.Client(api_key=api_key)
-        # Use instructor's generic client wrapper for Google GenAI client
-        return instructor.from_provider(raw_client)
+        # Wrap Google GenAI client with explicit GEMINI_JSON mode for instructor compatibility
+        return instructor.from_provider(raw_client, mode=instructor.Mode.GEMINI_JSON)
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
         return None

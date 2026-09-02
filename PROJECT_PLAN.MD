@@ -7,8 +7,8 @@
 ## 📊 Quick Status Summary
 
 - **Core Infrastructure & UI:** Completed ✅
-- **Phase 3: AI Vision Extraction Engine:** IN PROGRESS 🚀
-- **Phase 4: AI Audit & RAG Chat Assistant:** PLANNED 🎯
+- **Phase 3: AI Vision Extraction Engine:** Completed ✅[cite: 13]
+- **Phase 4: AI Anomaly Engine & RAG Chat Assistant:** NEXT FOCUS 🚀
 - **Phase 1: Persistence & Supabase Storage:** Deferred ⏸️
 - **Phase 2: Multi-Tenant User Management:** Deferred ⏸️
 
@@ -36,24 +36,19 @@
 
 ---
 
-## 🚀 Phase 3: AI Vision Extraction Engine (Current Focus)
+## ✅ Phase 3: AI Vision Extraction Engine (Completed)
 
-**Goal:** Integrate Groq / Gemini Vision LLMs into `extractor_service.py` for structured PDF invoice extraction[cite: 13].
-
-* [ ] **Vision Processing Pipeline (`app/services/extractor_service.py`)**[cite: 13]
-  * [ ] PDF-to-image conversion pipeline for scanned documents.
-  * [ ] Vision prompt targeting key tax attributes:
-    * Vendor Name, Vendor GSTIN, Customer GSTIN
-    * Invoice Date & Invoice Number
-    * Taxable Amount, CGST, SGST, IGST, and Grand Total
-    * HSN/SAC codes and line item breakdown
-* [ ] **Structured Output Validation**
-  * [ ] Enforce output parsing via Pydantic schemas.
-  * [ ] Fallback handling for missing or unreadable fields.
+* [x] **Vision Processing Pipeline (`app/services/extractor_service.py`)**[cite: 13]
+  * [x] PDF rendering pipeline via `pypdfium2` for scanned/multimodal document extraction[cite: 13].
+  * [x] Structured vision prompt targeting key tax attributes (GSTIN, totals, line items, dates)[cite: 13].
+  * [x] Fallback integration supporting both Groq text LLMs and Gemini vision models[cite: 12, 13].
+* [x] **Structured Output Validation**[cite: 13]
+  * [x] Output parsing enforced via Pydantic schemas (`TaxInvoiceSchema` & `BankStatementSchema`)[cite: 13].
+  * [x] Key alignment and fallback confidence scoring for incomplete OCR outputs[cite: 13].
 
 ---
 
-## 🎯 Phase 4: AI Anomaly Engine & RAG Chat Assistant
+## 🎯 Phase 4: AI Anomaly Engine & RAG Chat Assistant (Next Steps)
 
 **Goal:** Elevate CA auditing with automated arithmetic checks and a natural-language ledger assistant.
 
