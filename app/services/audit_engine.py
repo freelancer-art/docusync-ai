@@ -37,14 +37,25 @@ class AuditEngine:
             raw_data["invoice_number"] = doc.invoice_number
 
         # 1. Run VerificationService Deterministic Audit Suite
-        audit_result = verification_service.audit_tax_invoice(
-            invoice_data=raw_data,
-            session=session,
-            current_doc_id=doc.id,
-        )
+        if hasattr(verification_service, "audit_tax_invoice"):
+            try:
+                audit_result = verification_service.audit_tax_invoice(
+                    invoice_data=raw_data,
+                    session=session,
+                    current_doc_id=doc.id,
+                )
 
-        for flag in audit_result.flags:
-            flags.append(flag.model_dump())
+                for flag in audit_result.flags:
+                    flags.append(flag.model_dump())
+            except Exception as e:
+                flags.append(
+                    {
+                        "code": "VERIFICATION_SERVICE_ERROR",
+                        "field": "verification_service",
+                        "severity": "WARNING",
+                        "message": f"Verification service encountered an error: {str(e)}",
+                    }
+                )
 
         # 2. Check Minimal Document Properties
         if not doc.total_amount or doc.total_amount <= 0:
@@ -69,7 +80,7 @@ class AuditEngine:
                 }
             )
 
-        if not doc.invoice_number or doc.invoice_number.strip().lower() in ["unknown_inv", ""]:
+        if not doc.invoice_number or doc.invoice_number.strip().lower() in ["unknown_inv", "inv-pending", ""]:
             flags.append(
                 {
                     "code": "MISSING_INVOICE_NUMBER",
