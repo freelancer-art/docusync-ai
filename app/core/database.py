@@ -25,14 +25,14 @@ class UserRole(str, Enum):
 
 class User(SQLModel, table=True):
     __table_args__ = {"extend_existing": True}
-    
+
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     full_name: str
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
-    # Explicit relationship mapping to DocumentRecord
+    # Explicit relationship mapping to DocumentRecord using string lookup
     documents: List["DocumentRecord"] = Relationship(back_populates="owner")
 
     def verify_password(self, password: str) -> bool:
@@ -73,7 +73,7 @@ class DocumentRecord(SQLModel, table=True):
     client_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
-    # Explicit relationship mapping to User
+    # Explicit relationship mapping to User using string lookup
     owner: Optional[User] = Relationship(back_populates="documents")
 
     def __init__(self, **data):

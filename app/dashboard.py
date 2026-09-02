@@ -37,7 +37,7 @@ if "chat_messages" not in st.session_state:
 # ---------------------------------------------------------
 if not st.session_state.authenticated:
     st.title("🔒 DocuSync AI Portal")
-    
+
     auth_mode = st.radio("Select Action", ["Sign In", "Register New CA Firm"], horizontal=True)
 
     col1, _ = st.columns([1, 2])
