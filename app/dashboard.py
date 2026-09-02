@@ -33,27 +33,58 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 
 # ---------------------------------------------------------
-# AUTHENTICATION SCREEN
+# AUTHENTICATION & REGISTRATION SCREEN
 # ---------------------------------------------------------
 if not st.session_state.authenticated:
-    st.title("🔒 DocuSync AI Sign In")
-    col1, col2 = st.columns([1, 2])
+    st.title("🔒 DocuSync AI Portal")
+    
+    auth_mode = st.radio("Select Action", ["Sign In", "Register New CA Firm"], horizontal=True)
+
+    col1, _ = st.columns([1, 2])
 
     with col1:
-        username_input = st.text_input("Username")
-        password_input = st.text_input("Password", type="password")
+        if auth_mode == "Sign In":
+            username_input = st.text_input("Username")
+            password_input = st.text_input("Password", type="password")
 
-        if st.button("Login", type="primary"):
-            with Session(engine) as session:
-                user = session.exec(
-                    select(User).where(User.username == username_input)
-                ).first()
-                if user and user.verify_password(password_input):
-                    st.session_state.authenticated = True
-                    st.session_state.user = user
-                    st.rerun()
+            if st.button("Login", type="primary"):
+                with Session(engine) as session:
+                    user = session.exec(
+                        select(User).where(User.username == username_input)
+                    ).first()
+                    if user and user.verify_password(password_input):
+                        st.session_state.authenticated = True
+                        st.session_state.user = user
+                        st.rerun()
+                    else:
+                        st.error("Invalid credentials.")
+        else:
+            st.subheader("CA Firm Registration")
+            new_username = st.text_input("Admin Username")
+            new_fullname = st.text_input("CA Firm / Admin Name")
+            new_password = st.text_input("Password", type="password")
+
+            if st.button("Register CA Account", type="primary"):
+                if not new_username or not new_fullname or not new_password:
+                    st.error("Please fill out all fields.")
                 else:
-                    st.error("Invalid credentials.")
+                    with Session(engine) as session:
+                        existing_user = session.exec(
+                            select(User).where(User.username == new_username)
+                        ).first()
+                        if existing_user:
+                            st.error(f"Username '{new_username}' is already registered.")
+                        else:
+                            ca_user = User(
+                                username=new_username,
+                                full_name=new_fullname,
+                                hashed_password=User.hash_password(new_password),
+                                role=UserRole.CA_ADMIN,
+                            )
+                            session.add(ca_user)
+                            session.commit()
+                            st.success("CA Account created successfully! Please sign in.")
+
     st.stop()
 
 # ---------------------------------------------------------
@@ -96,9 +127,13 @@ st.title(
     f"📄 DocuSync AI: {'CA Master Ledger' if is_admin else 'Client Document Portal'}"
 )
 
-tab_ingest, tab_audit, tab_rag, tab_analytics = st.tabs(
-    ["📤 Upload & Extract", "📋 Audit Ledger", "💬 Ask DocuSync AI", "📊 Analytics"]
-)
+# Dynamically construct tabs based on role
+tab_titles = ["📤 Upload & Extract", "📋 Audit Ledger", "💬 Ask DocuSync AI", "📊 Analytics"]
+if is_admin:
+    tab_titles.append("👥 Manage Accounts")
+
+tabs = st.tabs(tab_titles)
+tab_ingest, tab_audit, tab_rag, tab_analytics = tabs[0], tabs[1], tabs[2], tabs[3]
 
 # ---------------------------------------------------------
 # TAB 1: UPLOAD & EXTRACT
@@ -119,7 +154,7 @@ with tab_ingest:
             )
             target_client_id = client_options[selected_client_name]
         else:
-            st.warning("No client accounts found. Please seed client users.")
+            st.warning("No client accounts found. Please onboard client accounts in the 'Manage Accounts' tab.")
             target_client_id = None
     else:
         target_client_id = user.id
@@ -484,3 +519,63 @@ with tab_analytics:
         col2.metric("Total Invoice Value", f"₹{total_val:,.2f}")
     else:
         st.info("No transaction data available for analytics.")
+
+# ---------------------------------------------------------
+# TAB 5: MANAGE ACCOUNTS (CA ADMIN ONLY)
+# ---------------------------------------------------------
+if is_admin:
+    tab_users = tabs[4]
+    with tab_users:
+        st.header("👥 Account Management")
+        st.caption("Onboard new Client accounts or manage existing users in the system.")
+
+        col_onboard, col_list = st.columns([1, 1])
+
+        with col_onboard:
+            st.subheader("➕ Onboard New Client Account")
+            with st.form("onboard_client_form"):
+                client_username = st.text_input("Username")
+                client_fullname = st.text_input("Client / Company Name")
+                client_password = st.text_input("Temporary Password", type="password")
+
+                onboard_submitted = st.form_submit_button("Create Client Account", type="primary")
+
+                if onboard_submitted:
+                    if not client_username or not client_fullname or not client_password:
+                        st.error("All fields are required.")
+                    else:
+                        with Session(engine) as session:
+                            existing = session.exec(
+                                select(User).where(User.username == client_username)
+                            ).first()
+                            if existing:
+                                st.error(f"Username '{client_username}' already exists.")
+                            else:
+                                new_client = User(
+                                    username=client_username,
+                                    full_name=client_fullname,
+                                    hashed_password=User.hash_password(client_password),
+                                    role=UserRole.CLIENT,
+                                )
+                                session.add(new_client)
+                                session.commit()
+                                st.success(f"Successfully onboarded Client: '{client_fullname}'!")
+                                st.rerun()
+
+        with col_list:
+            st.subheader("📜 Existing Accounts")
+            with Session(engine) as session:
+                users_list = session.exec(select(User)).all()
+                if users_list:
+                    user_table_data = [
+                        {
+                            "ID": u.id,
+                            "Username": u.username,
+                            "Full Name": u.full_name,
+                            "Role": u.role,
+                        }
+                        for u in users_list
+                    ]
+                    st.dataframe(pd.DataFrame(user_table_data), use_container_width=True)
+                else:
+                    st.info("No users found.")
