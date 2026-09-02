@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.api.auth import router as auth_router
 from app.api.client_portal import router as portal_router
 from app.api.documents import router as documents_router
+from app.api.endpoints.users import router as users_router
 from app.api.payments import router as payments_router
 from app.api.v1.extraction import router as extraction_router
 from app.config import settings
@@ -15,6 +16,7 @@ from app.core.database import engine, init_db
 from app.core.input_validation import PayloadSizeLimitMiddleware
 from app.core.logging import CorrelationIDMiddleware
 from app.core.middleware import setup_security_middleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: init_db failed on startup: {e}")
     yield
+
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
 
@@ -49,6 +52,7 @@ app.include_router(documents_router)
 app.include_router(auth_router)
 app.include_router(portal_router)
 app.include_router(payments_router)
+app.include_router(users_router)
 
 
 @app.get("/")
@@ -61,10 +65,12 @@ def liveness_probe():
     """Basic liveness probe confirming API service is running."""
     return {"status": "alive"}
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-    
+
+
 @app.get("/ready")
 def readiness_probe(response: Response):
     """Readiness probe verifying DB pool & Redis worker broker connectivity."""
@@ -98,6 +104,8 @@ def readiness_probe(response: Response):
 
     return {"status": "ready" if is_ready else "not_ready", "checks": checks}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

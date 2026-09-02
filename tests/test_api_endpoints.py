@@ -1,98 +1,52 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
-from sqlmodel.pool import StaticPool
 
-from app.api.documents import get_current_user, get_session
-from app.core.database import DocumentRecord, User, UserRole
-from app.main import app
-
-# Set up clean in-memory SQLite database for test isolation
-engine = create_engine(
-    "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-)
+from app.core.database import User, UserRole
 
 
-@pytest.fixture(name="session")
-def session_fixture():
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-    SQLModel.metadata.drop_all(engine)
-
-
-@pytest.fixture(name="client")
-def client_fixture(session: Session):
-    def get_session_override():
-        return session
-
-    app.dependency_overrides[get_session] = get_session_override
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
-
-
-def test_upload_document_creates_db_record(client: TestClient, session: Session):
-    # Setup test user
-    user = User(
-        username="test_client",
-        full_name="Test Client",
-        hashed_password="pw",
-        role=UserRole.CLIENT,
+def test_user_creation_duplicate_username(client: TestClient, admin_token_headers: dict, db_session):
+    """Cover lines 56: Duplicate username creation returns 400 Bad Request."""
+    response = client.post(
+        "/api/users/",
+        json={
+            "username": "admin",
+            "full_name": "Duplicate Admin",
+            "password": "Password123!",
+            "role": "CLIENT",
+        },
+        headers=admin_token_headers,
     )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-
-    app.dependency_overrides[get_current_user] = lambda: user
-
-    pdf_bytes = b"%PDF-1.4 test invoice content"
-    files = {"file": ("../../malicious_invoice.pdf", pdf_bytes, "application/pdf")}
-
-    response = client.post("/api/documents/upload", files=files)
-    assert response.status_code == 200
-    data = response.json()
-
-    # Path traversal should be stripped
-    assert data["filename"] == "malicious_invoice.pdf"
-
-    # Verify DB record creation
-    db_doc = session.get(DocumentRecord, data["id"])
-    assert db_doc is not None
-    assert db_doc.client_id == user.id
+    assert response.status_code == 400
+    assert "already registered" in response.json()["detail"].lower() or "exists" in response.json()["detail"].lower()
 
 
-def test_multitenant_access_control(client: TestClient, session: Session):
-    user1 = User(
-        id=1,
-        username="user1",
-        full_name="User 1",
-        hashed_password="pw",
-        role=UserRole.CLIENT,
+def test_get_user_not_found(client: TestClient, admin_token_headers: dict):
+    """Cover lines 91-97: Fetching non-existent user returns 404 Not Found."""
+    response = client.get("/api/users/999999", headers=admin_token_headers)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_update_user_not_found(client: TestClient, admin_token_headers: dict):
+    """Cover lines 110, 118, 120: Updating non-existent user returns 404 Not Found."""
+    response = client.patch(
+        "/api/users/999999",
+        json={"full_name": "Ghost User", "password": "NewPassword123!"},
+        headers=admin_token_headers,
     )
-    user2 = User(
-        id=2,
-        username="user2",
-        full_name="User 2",
-        hashed_password="pw",
-        role=UserRole.CLIENT,
-    )
-    session.add_all([user1, user2])
-    session.commit()
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
-    doc = DocumentRecord(
-        filename="user1_doc.pdf",
-        document_type="INVOICE",
-        extraction_method="AI_VISION",
-        overall_status="PENDING",
-        client_id=user1.id,
-        raw_json_data="{}",
-        audit_flags_json="{}",
-    )
-    session.add(doc)
-    session.commit()
 
-    # User 2 attempting to view User 1's document should receive 403 Forbidden
-    app.dependency_overrides[get_current_user] = lambda: user2
-    response = client.get(f"/api/documents/{doc.id}")
-    assert response.status_code == 403
+def test_delete_user_not_found(client: TestClient, admin_token_headers: dict):
+    """Cover line 137: Deleting non-existent user returns 404 Not Found."""
+    response = client.delete("/api/users/999999", headers=admin_token_headers)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_delete_self_as_admin_forbidden(client: TestClient, admin_user: User, admin_token_headers: dict):
+    """Cover line 143: Admin attempting self-deletion returns 400 Bad Request."""
+    response = client.delete(f"/api/users/{admin_user.id}", headers=admin_token_headers)
+    assert response.status_code == 400
+    assert "cannot delete" in response.json()["detail"].lower()

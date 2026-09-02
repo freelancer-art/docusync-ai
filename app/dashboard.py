@@ -54,10 +54,6 @@ if not st.session_state.authenticated:
                     st.rerun()
                 else:
                     st.error("Invalid credentials.")
-
-        st.info(
-            "Demo Logins:\n- CA Admin: `ca_admin` / `admin123`\n- Client 1: `acme_corp` / `client123`\n- Client 2: `apex_tech` / `client123`"
-        )
     st.stop()
 
 # ---------------------------------------------------------

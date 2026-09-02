@@ -1,11 +1,10 @@
 import io
-import os
 import logging
+import os
 from app.config import settings
 
 logger = logging.getLogger("docusync.storage")
 
-# Retrieve Supabase Credentials safely
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "docusync-uploads")
@@ -42,7 +41,6 @@ class StorageService:
         """
         if self.use_supabase and self.client:
             try:
-                # Upload bytes directly to Supabase bucket
                 res = self.client.storage.from_(SUPABASE_BUCKET).upload(
                     path=filename,
                     file=content,
@@ -52,7 +50,7 @@ class StorageService:
             except Exception as e:
                 logger.error(f"Supabase upload failed for {filename}: {e}. Falling back to local storage.")
 
-        # Local fallback
+        # Local disk handling
         local_path = os.path.join(LOCAL_UPLOAD_DIR, filename)
         with open(local_path, "wb") as f:
             f.write(content)
@@ -69,7 +67,7 @@ class StorageService:
             except Exception as e:
                 logger.error(f"Supabase download failed for {filename}: {e}. Trying local disk.")
 
-        # Local fallback
+        # Local disk fallback
         local_path = os.path.join(LOCAL_UPLOAD_DIR, filename)
         if os.path.exists(local_path):
             with open(local_path, "rb") as f:
@@ -79,7 +77,7 @@ class StorageService:
 
     def get_file_url(self, filename: str) -> str:
         """
-        Generates public URL if hosted on Supabase Storage.
+        Generates public URL if hosted on Supabase Storage or local path fallback.
         """
         if self.use_supabase and self.client:
             try:

@@ -1,0 +1,116 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/amit/projects/docusync-ai/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/amit/projects/docusync-ai
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.14.2, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 62 items
+
+tests/test_api_and_rbac.py::test_health_check PASSED                     [  1%]
+tests/test_api_and_rbac.py::test_tenant_isolation_rules PASSED           [  3%]
+tests/test_api_and_rbac.py::test_filename_sanitization PASSED            [  4%]
+tests/test_api_and_rbac.py::test_admin_create_user_and_list PASSED       [  6%]
+tests/test_api_and_rbac.py::test_client_privilege_escalation_blocked PASSED [  8%]
+tests/test_api_and_rbac.py::test_get_current_user_profile PASSED         [  9%]
+tests/test_api_and_rbac.py::test_admin_update_and_delete_user PASSED     [ 11%]
+tests/test_api_endpoints.py::test_user_creation_duplicate_username PASSED [ 12%]
+tests/test_api_endpoints.py::test_get_user_not_found PASSED              [ 14%]
+tests/test_api_endpoints.py::test_update_user_not_found PASSED           [ 16%]
+tests/test_api_endpoints.py::test_delete_user_not_found PASSED           [ 17%]
+tests/test_api_endpoints.py::test_delete_self_as_admin_forbidden PASSED  [ 19%]
+tests/test_audit_engine.py::test_gstin_valid_maharashtra PASSED          [ 20%]
+tests/test_audit_engine.py::test_gstin_invalid_checksum PASSED           [ 22%]
+tests/test_audit_engine.py::test_gstin_invalid_length PASSED             [ 24%]
+tests/test_audit_engine.py::test_gstin_whitespace_sanitization PASSED    [ 25%]
+tests/test_audit_engine.py::test_zoho_exporter_csv_generation PASSED     [ 27%]
+tests/test_audit_engine.py::test_tally_exporter_xml_structure PASSED     [ 29%]
+tests/test_audit_engine.py::test_arithmetic_verification_mismatch PASSED [ 30%]
+tests/test_audit_engine.py::test_intra_state_tax_mismatch PASSED         [ 32%]
+tests/test_audit_engine.py::test_inter_state_tax_mismatch PASSED         [ 33%]
+tests/test_audit_engine.py::test_duplicate_billing_detection PASSED      [ 35%]
+tests/test_auth_and_exports.py::test_login_and_jwt_export_flow PASSED    [ 37%]
+tests/test_auth_and_exports.py::test_tally_xml_export_flow PASSED        [ 38%]
+tests/test_celery_worker.py::test_process_document_task_missing_doc PASSED [ 40%]
+tests/test_celery_worker.py::test_process_document_task_missing_file PASSED [ 41%]
+tests/test_celery_worker.py::test_process_document_task_successful_execution PASSED [ 43%]
+tests/test_client_portal.py::test_portal_review_queue_and_override PASSED [ 45%]
+tests/test_extractor_service.py::TestExtractorSchemas::test_tax_invoice_schema_instantiation PASSED [ 46%]
+tests/test_extractor_service.py::TestDocumentClassification::test_classify_tax_invoice PASSED [ 48%]
+tests/test_extractor_service.py::TestDocumentClassification::test_classify_bank_statement PASSED [ 50%]
+tests/test_extractor_service.py::TestExtractorFallback::test_fallback_when_no_ai_client PASSED [ 51%]
+tests/test_extractor_service.py::TestAuditEngineIntegration::test_extracted_data_audit_evaluation PASSED [ 53%]
+tests/test_input_validation.py::test_payload_within_limit_succeeds PASSED [ 54%]
+tests/test_input_validation.py::test_payload_exceeding_limit_rejected PASSED [ 56%]
+tests/test_logging.py::test_correlation_id_generated_if_missing PASSED   [ 58%]
+tests/test_logging.py::test_correlation_id_propagated_if_provided PASSED [ 59%]
+tests/test_logging.py::test_structured_log_formatter PASSED              [ 61%]
+tests/test_rag_assistant.py::test_rag_context_scoping_client_vs_admin PASSED [ 62%]
+tests/test_rag_assistant.py::test_rag_chat_synthesis_mock PASSED         [ 64%]
+tests/test_rate_limiter.py::test_rate_limiter_enforcement PASSED         [ 66%]
+tests/test_reconciliation.py::test_payment_reconciliation_flow PASSED    [ 67%]
+tests/test_security_hardening.py::test_gstin_validator_xss_and_sql_injection PASSED [ 69%]
+tests/test_security_hardening.py::test_malformed_json_resilience PASSED  [ 70%]
+tests/test_security_hardening.py::test_sql_injection_prevention_in_queries PASSED [ 72%]
+tests/test_security_hardening.py::test_rbac_client_isolation PASSED      [ 74%]
+tests/test_security_hardening.py::test_filename_path_traversal_prevention PASSED [ 75%]
+tests/test_security_hardening.py::test_csv_formula_injection_prevention PASSED [ 77%]
+tests/test_security_hardening.py::test_monetary_edge_cases_zero_and_negative PASSED [ 79%]
+tests/test_security_hardening.py::test_monetary_floating_point_precision PASSED [ 80%]
+tests/test_security_hardening.py::test_missing_optional_fields_resilience PASSED [ 82%]
+tests/test_security_hardening.py::test_malformed_json_types_in_line_items PASSED [ 83%]
+tests/test_security_hardening.py::test_valid_pdf_magic_bytes PASSED      [ 85%]
+tests/test_security_hardening.py::test_valid_image_magic_bytes PASSED    [ 87%]
+tests/test_security_hardening.py::test_reject_executable_disguised_as_pdf PASSED [ 88%]
+tests/test_security_hardening.py::test_reject_empty_file PASSED          [ 90%]
+tests/test_security_headers.py::test_security_headers_present PASSED     [ 91%]
+tests/test_security_headers.py::test_cors_allowed_origin PASSED          [ 93%]
+tests/test_security_headers.py::test_cors_disallowed_origin PASSED       [ 95%]
+tests/test_storage_and_ocr.py::test_storage_service_local_flow PASSED    [ 96%]
+tests/test_storage_and_ocr.py::test_storage_service_file_not_found PASSED [ 98%]
+tests/test_storage_and_ocr.py::test_ocr_engine_invalid_input PASSED      [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /home/amit/projects/docusync-ai/.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+tests/test_api_and_rbac.py: 2 warnings
+tests/test_audit_engine.py: 2 warnings
+tests/test_auth_and_exports.py: 2 warnings
+tests/test_celery_worker.py: 2 warnings
+tests/test_client_portal.py: 1 warning
+tests/test_extractor_service.py: 1 warning
+tests/test_rag_assistant.py: 2 warnings
+tests/test_reconciliation.py: 1 warning
+tests/test_security_hardening.py: 12 warnings
+  /home/amit/projects/docusync-ai/.venv/lib/python3.12/site-packages/pydantic/_internal/_fields.py:727: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return fac()
+
+tests/test_rag_assistant.py::test_rag_context_scoping_client_vs_admin
+  /home/amit/projects/docusync-ai/tests/test_rag_assistant.py:62: DeprecationWarning: 
+          🚨 You probably want to use `session.exec()` instead of `session.query()`.
+  
+          `session.exec()` is SQLModel's own short version with improved type
+          annotations.
+  
+          Otherwise, you might want to use `session.execute()` instead of
+          `session.query()`.
+          
+    c1_records = session.query(DocumentRecord).filter(DocumentRecord.client_id == client1.id).all()
+
+tests/test_rag_assistant.py::test_rag_context_scoping_client_vs_admin
+  /home/amit/projects/docusync-ai/tests/test_rag_assistant.py:67: DeprecationWarning: 
+          🚨 You probably want to use `session.exec()` instead of `session.query()`.
+  
+          `session.exec()` is SQLModel's own short version with improved type
+          annotations.
+  
+          Otherwise, you might want to use `session.execute()` instead of
+          `session.query()`.
+          
+    admin_records = session.query(DocumentRecord).all()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 62 passed, 28 warnings in 34.98s =======================
