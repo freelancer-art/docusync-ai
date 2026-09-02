@@ -32,8 +32,8 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
-    # Explicit relationship mapping to DocumentRecord using string lookup
-    documents: List["DocumentRecord"] = Relationship(back_populates="owner")
+    # Fully module-qualified string reference avoids registry collisions during Streamlit reloads
+    documents: List["app.core.database.DocumentRecord"] = Relationship(back_populates="owner")
 
     def verify_password(self, password: str) -> bool:
         if not self.hashed_password:

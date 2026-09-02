@@ -21,8 +21,14 @@ st.set_page_config(
     page_title="DocuSync AI - Multi-Tenant Portal", page_icon="🔒", layout="wide"
 )
 
-# Ensure database tables are created
-init_db()
+
+# Cache database initial creation to prevent registry conflicts during Streamlit reloads
+@st.cache_resource
+def run_db_initialization():
+    init_db()
+
+
+run_db_initialization()
 
 # Session State Initialization
 if "authenticated" not in st.session_state:
