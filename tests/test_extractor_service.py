@@ -109,5 +109,7 @@ class TestAuditEngineIntegration:
 
         audit_result = AuditEngine.evaluate_document(doc)
 
-        assert audit_result["status"] == "NEEDS_REVIEW"
-        assert "INTER_STATE_TAX_TYPE_MISMATCH" in audit_result["flags"]
+        # Inter-state tax mismatch carries CRITICAL severity -> REJECTED
+        assert audit_result["status"] == "REJECTED"
+        flag_codes = [f["code"] for f in audit_result["flags"]]
+        assert "INTER_STATE_TAX_MISMATCH" in flag_codes

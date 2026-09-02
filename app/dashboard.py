@@ -9,6 +9,8 @@ import streamlit as st
 from sqlmodel import Session, select
 
 from app.core.database import DocumentRecord, User, UserRole, engine, init_db
+from app.core.groq_client import get_ai_client
+from app.services.audit_engine import process_document_audit
 from app.services.extractor_service import extractor_service
 from app.services.gstin_validator import gstin_validator
 from app.services.tally_exporter import tally_exporter
@@ -27,6 +29,8 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "user" not in st.session_state:
     st.session_state.user = None
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
 
 # ---------------------------------------------------------
 # AUTHENTICATION SCREEN
@@ -70,6 +74,7 @@ with st.sidebar:
     if st.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.user = None
+        st.session_state.chat_messages = []
         st.rerun()
 
     st.divider()
@@ -95,8 +100,8 @@ st.title(
     f"📄 DocuSync AI: {'CA Master Ledger' if is_admin else 'Client Document Portal'}"
 )
 
-tab_ingest, tab_audit, tab_analytics = st.tabs(
-    ["📤 Upload & Extract", "📋 Audit Ledger", "📊 Analytics"]
+tab_ingest, tab_audit, tab_rag, tab_analytics = st.tabs(
+    ["📤 Upload & Extract", "📋 Audit Ledger", "💬 Ask DocuSync AI", "📊 Analytics"]
 )
 
 # ---------------------------------------------------------
@@ -131,7 +136,7 @@ with tab_ingest:
     if (
         uploaded_file is not None and target_client_id is not None
     ) and st.button("Process & Save", type="primary"):
-        with st.spinner("Processing & auditing document..."):
+        with st.spinner("Processing, extracting & auditing document..."):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
                 tmp_path = tmp_file.name
@@ -143,33 +148,10 @@ with tab_ingest:
                     filename=uploaded_file.name,
                 )
 
-                # 2. Derive audit flags & default status
-                flags = []
-                confidence = extraction_result.get("confidence_score", 1.0)
-                if confidence < 0.7:
-                    flags.append(
-                        {
-                            "code": "LOW_CONFIDENCE",
-                            "severity": "MEDIUM",
-                            "message": f"Extraction confidence score low: {confidence}",
-                        }
-                    )
-
                 vendor_name = extraction_result.get("vendor_name")
                 total_amount = extraction_result.get("total_amount")
 
-                if not vendor_name or vendor_name == "Extracted Vendor":
-                    flags.append(
-                        {
-                            "code": "MISSING_VENDOR",
-                            "severity": "HIGH",
-                            "message": "Vendor name requires manual verification.",
-                        }
-                    )
-
-                initial_status = "NEEDS_REVIEW" if flags else "VERIFIED"
-
-                # 3. Create and persist DocumentRecord in SQLModel session
+                # 2. Save DocumentRecord
                 new_record = DocumentRecord(
                     client_id=target_client_id,
                     filename=uploaded_file.name,
@@ -178,9 +160,9 @@ with tab_ingest:
                     invoice_number=extraction_result.get("invoice_number"),
                     total_amount=float(total_amount or 0.0),
                     payment_status="UNPAID",
-                    overall_status=initial_status,
+                    overall_status="NEEDS_REVIEW",
                     raw_json_data=json.dumps(extraction_result),
-                    audit_flags_json=json.dumps(flags),
+                    audit_flags_json=json.dumps([]),
                     created_at=datetime.utcnow(),
                 )
 
@@ -189,8 +171,11 @@ with tab_ingest:
                     session.commit()
                     session.refresh(new_record)
 
+                    # 3. Trigger full deterministic & AI audit engine evaluation
+                    audited_record = process_document_audit(new_record, session)
+
                 st.success(
-                    f"Successfully processed and saved Record ID #{new_record.id} for Tenant ID #{target_client_id}!"
+                    f"Successfully processed Record ID #{audited_record.id} | Status: {audited_record.overall_status}!"
                 )
                 st.json(extraction_result)
 
@@ -256,7 +241,6 @@ with tab_audit:
                 flags = json.loads(r.audit_flags_json) if r.audit_flags_json else []
                 flag_codes = ", ".join([f.get("code", "") for f in flags])
 
-                # Fetch Client User directly
                 owner_user = session.get(User, r.client_id) if r.client_id else None
                 client_name = owner_user.full_name if owner_user else "Unassigned"
 
@@ -384,7 +368,7 @@ with tab_audit:
                                 value=float(rec.total_amount or 0.0),
                                 step=0.01,
                             )
-                            
+
                             status_options = ["VERIFIED", "NEEDS_REVIEW", "REJECTED"]
                             current_idx = (
                                 status_options.index(rec.overall_status)
@@ -396,11 +380,11 @@ with tab_audit:
                                 options=status_options,
                                 index=current_idx,
                             )
-                            
+
                             notes = st.text_area(
                                 "Auditor Notes", value=rec.auditor_notes or ""
                             )
-                            
+
                             save_btn = st.form_submit_button("Save Audit Decision", type="primary")
 
                         if save_btn:
@@ -420,7 +404,73 @@ with tab_audit:
                         st.info(f"**CA Auditor Note:** {rec.auditor_notes}")
 
 # ---------------------------------------------------------
-# TAB 3: ANALYTICS
+# TAB 3: RAG CHAT ASSISTANT ("Ask DocuSync AI")
+# ---------------------------------------------------------
+with tab_rag:
+    st.header("💬 Ask DocuSync AI")
+    st.caption("Perform natural language queries over your tenant ledger data, audit flags, and tax totals.")
+
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    user_query = st.chat_input("e.g. What is our total invoice exposure, and which records are flagged?")
+
+    if user_query:
+        st.session_state.chat_messages.append({"role": "user", "content": user_query})
+        with st.chat_message("user"):
+            st.markdown(user_query)
+
+        # Build ledger context from database
+        with Session(engine) as session:
+            query = select(DocumentRecord)
+            if not is_admin:
+                query = query.where(DocumentRecord.client_id == user.id)
+            doc_records = session.exec(query).all()
+
+            ledger_summary = []
+            for d in doc_records:
+                ledger_summary.append({
+                    "id": d.id,
+                    "vendor": d.vendor_name,
+                    "invoice_number": d.invoice_number,
+                    "total_amount": d.total_amount,
+                    "status": d.overall_status,
+                    "flags": json.loads(d.audit_flags_json) if d.audit_flags_json else [],
+                    "payment_status": d.payment_status,
+                })
+
+        # Synthesize answer using AI client
+        client, model = get_ai_client()
+        if not client or model == "NONE":
+            response_text = "AI assistant client is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
+        else:
+            system_prompt = (
+                "You are an expert CA Assistant analyzing structured document records. "
+                "Answer the user's questions based strictly on the provided ledger context.\n\n"
+                f"Ledger Data:\n{json.dumps(ledger_summary, indent=2)}"
+            )
+
+            try:
+                chat_res = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_query},
+                    ],
+                    temperature=0.2,
+                )
+                response_text = chat_res.choices[0].message.content
+            except Exception as e:
+                response_text = f"Error generating response: {e}"
+
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+
+        st.session_state.chat_messages.append({"role": "assistant", "content": response_text})
+
+# ---------------------------------------------------------
+# TAB 4: ANALYTICS
 # ---------------------------------------------------------
 with tab_analytics:
     st.header("Pipeline Metrics")

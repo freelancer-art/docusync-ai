@@ -62,7 +62,12 @@ def test_process_document_task_successful_execution(
     upload_dir.mkdir()
     sample_file = upload_dir / "sample_invoice.pdf"
     sample_file.write_text(
-        "Dummy Invoice Content: Tax Invoice #12345 from Vendor Corp. Total: 500"
+        "Tax Invoice #INV-12345\n"
+        "Vendor: Vendor Corp\n"
+        "Vendor GSTIN: 27AAACT2727Q1ZW\n"
+        "Taxable Amount: 500.0\n"
+        "Tax Amount: 90.0\n"
+        "Total Amount: 590.0"
     )
 
     monkeypatch.setattr("app.worker.UPLOAD_DIR", str(upload_dir))
@@ -70,6 +75,9 @@ def test_process_document_task_successful_execution(
     with Session(test_db_engine) as session:
         doc = DocumentRecord(
             filename="sample_invoice.pdf",
+            vendor_name="Vendor Corp",
+            invoice_number="INV-12345",
+            total_amount=590.0,
             document_type="TAX_INVOICE",
             extraction_method="AUTO_PARSER",
             overall_status="PENDING",
@@ -83,10 +91,10 @@ def test_process_document_task_successful_execution(
 
     result = process_document_task.apply(args=(doc_id, TEST_DB_URL)).get()
 
-    assert result["status"] in ["VERIFIED", "NEEDS_REVIEW"]
+    assert result["status"] in ["VERIFIED", "NEEDS_REVIEW", "REJECTED"]
     assert result["doc_id"] == doc_id
 
     with Session(test_db_engine) as session:
         updated_doc = session.get(DocumentRecord, doc_id)
         assert updated_doc.raw_json_data is not None
-        assert updated_doc.overall_status in ["VERIFIED", "NEEDS_REVIEW"]
+        assert updated_doc.overall_status in ["VERIFIED", "NEEDS_REVIEW", "REJECTED"]
