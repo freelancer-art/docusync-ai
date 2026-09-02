@@ -24,6 +24,8 @@ class UserRole(str, Enum):
 
 
 class User(SQLModel, table=True):
+    __table_args__ = {"extend_existing": True}
+    
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     full_name: str
@@ -53,6 +55,8 @@ class User(SQLModel, table=True):
 
 
 class DocumentRecord(SQLModel, table=True):
+    __table_args__ = {"extend_existing": True}
+
     id: Optional[int] = Field(default=None, primary_key=True)
     filename: str
     document_type: str = "INVOICE"
