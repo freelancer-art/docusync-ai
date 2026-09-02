@@ -1,119 +1,102 @@
+import base64
 import io
 import json
 import logging
-from typing import Any
+from typing import Any, List, Optional
+from pydantic import BaseModel, Field
 
-from groq import Groq, GroqError
-from instructor import Instructor, from_groq
-from instructor.core import InstructorError
+import pypdfium2 as pdfium
 
 from app.config import settings
 from app.core import ocr_engine
-
-# ------------------------------------------------------------------
-# Safe Dynamic Imports for Enums and Schemas
-# ------------------------------------------------------------------
-try:
-    from app.schemas.document_type import DocumentType
-except ImportError:
-    try:
-        from app.schemas.document import DocumentType
-    except ImportError:
-        from enum import Enum
-
-        class DocumentType(str, Enum):
-            TAX_INVOICE = "TAX_INVOICE"
-            BANK_STATEMENT = "BANK_STATEMENT"
-
-
-try:
-    from app.schemas.tax_invoice import TaxInvoice
-except ImportError:
-    try:
-        from app.schemas.tax_invoice import TaxInvoiceSchema as TaxInvoice
-    except ImportError:
-        try:
-            from app.schemas.tax_invoice import InvoiceSchema as TaxInvoice
-        except ImportError:
-            from pydantic import BaseModel
-
-            class TaxInvoice(BaseModel):
-                vendor_name: str | None = None
-                invoice_number: str | None = None
-                total_amount: float | None = 0.0
-
-
-try:
-    from app.schemas.bank_statement import BankStatement
-except ImportError:
-    try:
-        from app.schemas.bank_statement import BankStatementSchema as BankStatement
-    except ImportError:
-        from pydantic import BaseModel
-
-        class BankStatement(BaseModel):
-            account_number: str | None = None
-            opening_balance: float | None = 0.0
-            closing_balance: float | None = 0.0
-
+from app.core.groq_client import get_ai_client
 
 logger = logging.getLogger("docusync.extractor")
 
+# ------------------------------------------------------------------
+# Explicit Schema Definitions for Structured AI Extraction
+# ------------------------------------------------------------------
+class LineItem(BaseModel):
+    description: Optional[str] = Field(default=None, description="Description of product or service")
+    hsn_sac: Optional[str] = Field(default=None, description="HSN or SAC code")
+    quantity: Optional[float] = Field(default=0.0, description="Quantity")
+    unit_price: Optional[float] = Field(default=0.0, description="Price per unit")
+    taxable_amount: Optional[float] = Field(default=0.0, description="Taxable amount before GST")
+    gst_rate: Optional[float] = Field(default=0.0, description="GST Rate Percentage (e.g. 18.0)")
 
-def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str]:
-    """
-    Safely extracts text using available multi-engine cascades (pdfplumber -> Tesseract OCR).
-    Returns a tuple of (extracted_text, extraction_method).
-    """
+
+class TaxInvoiceSchema(BaseModel):
+    vendor_name: Optional[str] = Field(default=None, description="Legal Name of the Vendor/Supplier")
+    vendor_gstin: Optional[str] = Field(default=None, description="15-digit GSTIN of the Vendor")
+    customer_name: Optional[str] = Field(default=None, description="Legal Name of the Recipient/Client")
+    customer_gstin: Optional[str] = Field(default=None, description="15-digit GSTIN of the Recipient")
+    invoice_number: Optional[str] = Field(default=None, description="Invoice or Bill Reference Number")
+    invoice_date: Optional[str] = Field(default=None, description="Date of Invoice issuance (YYYY-MM-DD)")
+    taxable_amount: Optional[float] = Field(default=0.0, description="Total Taxable Value")
+    cgst_amount: Optional[float] = Field(default=0.0, description="Central GST Amount")
+    sgst_amount: Optional[float] = Field(default=0.0, description="State GST Amount")
+    igst_amount: Optional[float] = Field(default=0.0, description="Integrated GST Amount")
+    total_amount: Optional[float] = Field(default=0.0, description="Grand Total Invoice Amount")
+    line_items: List[LineItem] = Field(default_factory=list, description="Itemized invoice rows")
+
+
+class BankStatementSchema(BaseModel):
+    bank_name: Optional[str] = Field(default=None, description="Name of the Bank")
+    account_number: Optional[str] = Field(default=None, description="Bank Account Number")
+    statement_period: Optional[str] = Field(default=None, description="Date Range of Statement")
+    opening_balance: Optional[float] = Field(default=0.0, description="Opening Balance")
+    closing_balance: Optional[float] = Field(default=0.0, description="Closing Balance")
+
+
+def convert_pdf_to_images_base64(file_bytes: bytes, max_pages: int = 2) -> List[str]:
+    """Renders PDF pages to base64 JPEG strings for Multi-Modal Vision processing."""
+    base64_images = []
+    try:
+        pdf = pdfium.PdfDocument(file_bytes)
+        num_pages = min(len(pdf), max_pages)
+        for i in range(num_pages):
+            page = pdf[i]
+            bitmap = page.render(scale=2.0)
+            pil_image = bitmap.to_pil()
+            buffer = io.BytesIO()
+            pil_image.save(buffer, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            base64_images.append(img_str)
+    except Exception as e:
+        logger.warning(f"Failed PDF page rendering to Vision base64: {e}")
+    return base64_images
+
+
+def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str, bytes]:
+    """Safely reads input bytes and extracts text using available OCR cascades."""
     if isinstance(file_input, str):
         try:
             with open(file_input, "rb") as f:
                 file_bytes = f.read()
         except OSError as e:
             logger.error(f"Failed to read file path {file_input}: {e}")
-            return "", "FAILED"
+            return "", "FAILED", b""
     else:
         file_bytes = file_input
 
-    stream_or_bytes = (
-        io.BytesIO(file_bytes) if isinstance(file_bytes, bytes) else file_bytes
-    )
+    stream_or_bytes = io.BytesIO(file_bytes) if isinstance(file_bytes, bytes) else file_bytes
 
     if hasattr(ocr_engine, "extract_text"):
         try:
             res = ocr_engine.extract_text(stream_or_bytes, filename)
             if isinstance(res, tuple):
-                return res[0], res[1]
-            return res, "pdfplumber_or_ocr"
-        except (OSError, RuntimeError, ValueError, TypeError):
-            try:
-                res = ocr_engine.extract_text(file_bytes)
-                if isinstance(res, tuple):
-                    return res[0], res[1]
-                return res, "pdfplumber_or_ocr"
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
-                logger.error(f"OCR engine extraction error: {e}")
+                return res[0], res[1], file_bytes
+            return res, "pdfplumber_or_ocr", file_bytes
+        except Exception as e:
+            logger.error(f"OCR engine extraction error: {e}")
 
     try:
-        return file_bytes.decode("utf-8", errors="ignore"), "raw_bytes_fallback"
-    except (UnicodeDecodeError, AttributeError):
-        return "", "FAILED"
+        return file_bytes.decode("utf-8", errors="ignore"), "raw_bytes_fallback", file_bytes
+    except Exception:
+        return "", "FAILED", file_bytes
 
 
-def get_groq_client() -> Instructor | None:
-    """Instantiates an instructor-wrapped Groq client if an API key is available."""
-    if not settings.GROQ_API_KEY:
-        logger.warning("GROQ_API_KEY not set. LLM extraction will use mock fallback.")
-        return None
-    try:
-        raw_client = Groq(api_key=settings.GROQ_API_KEY)
-        return from_groq(raw_client)
-    except (GroqError, ValueError, RuntimeError) as e:
-        logger.error(f"Failed to initialize Groq client: {e}")
-        return None
-
-
-def classify_document_text(text: str) -> DocumentType:
+def classify_document_text(text: str) -> str:
     """Classifies raw text into TAX_INVOICE or BANK_STATEMENT using rule heuristics."""
     lower_text = text.lower()
     bank_keywords = [
@@ -124,130 +107,129 @@ def classify_document_text(text: str) -> DocumentType:
         "deposit",
         "account number",
     ]
-
     if any(keyword in lower_text for keyword in bank_keywords):
-        return DocumentType.BANK_STATEMENT
-    return DocumentType.TAX_INVOICE
+        return "BANK_STATEMENT"
+    return "TAX_INVOICE"
 
 
-def _calculate_confidence_score(
-    extracted_dict: dict[str, Any], extraction_method: str
-) -> float:
-    """Calculates overall extraction confidence score (0.0 to 1.0) based on present fields and method."""
+def _calculate_confidence_score(extracted_dict: dict[str, Any], extraction_method: str) -> float:
+    """Calculates overall extraction confidence score (0.0 to 1.0)."""
     score = 1.0
-
-    # Penalize fallback OCR engines relative to direct digital PDF extraction
-    if extraction_method == "tesseract_ocr":
+    if "ocr" in extraction_method.lower():
         score -= 0.15
     elif extraction_method == "raw_bytes_fallback":
         score -= 0.30
 
-    # Field completeness penalties
-    missing_key_count = 0
+    missing_keys = 0
     total_keys = len(extracted_dict) or 1
     for v in extracted_dict.values():
-        if v is None or v in ["", 0.0, "UNKNOWN_VENDOR", "UNKNOWN_INV"]:
-            missing_key_count += 1
+        if v in [None, "", 0.0, "Extracted Vendor", "INV-PENDING"]:
+            missing_keys += 1
 
-    field_completeness = 1.0 - (missing_key_count / total_keys)
-    final_score = round(
-        max(0.0, min(1.0, (score * 0.4) + (field_completeness * 0.6))), 2
-    )
+    field_completeness = 1.0 - (missing_keys / total_keys)
+    final_score = round(max(0.0, min(1.0, (score * 0.4) + (field_completeness * 0.6))), 2)
     return final_score
 
 
 def extract_structured_data(
     file_input: bytes | str,
     filename: str,
-    doc_type: DocumentType | None = None,
+    doc_type: str | None = None,
 ) -> dict:
     """
-    Full extraction pipeline:
-    1. Extracts raw text via pdfplumber / OCR fallback cascade.
-    2. Classifies document type if not specified.
-    3. Calls Groq structured outputs via instructor.
-    4. Computes confidence score.
+    AI Vision Pipeline:
+    1. Extract text and convert PDF pages into vision images.
+    2. Auto-classify document type.
+    3. Invoke Vision LLM (Groq / Gemini) via instructor.
+    4. Compute complete confidence score and return schema.
     """
-    raw_text, extraction_method = extract_raw_text(file_input, filename)
+    raw_text, extraction_method, file_bytes = extract_raw_text(file_input, filename)
 
     if not doc_type:
         doc_type = classify_document_text(raw_text)
 
-    client = get_groq_client()
+    base64_images = convert_pdf_to_images_base64(file_bytes) if file_bytes else []
+    
+    client, model_name = get_ai_client()
 
     if not client:
-        fallback_data = _generate_fallback_extraction(doc_type, filename, raw_text)
-        fallback_data["confidence_score"] = _calculate_confidence_score(
-            fallback_data, extraction_method
-        )
-        fallback_data["extraction_method"] = extraction_method
-        return fallback_data
+        fallback = _generate_fallback_extraction(doc_type, filename, raw_text)
+        fallback["confidence_score"] = _calculate_confidence_score(fallback, extraction_method)
+        fallback["extraction_method"] = extraction_method
+        return fallback
 
-    prompt_content = (
-        raw_text.strip()
-        if raw_text and raw_text.strip()
-        else f"No text content could be extracted from {filename}."
-    )
-    target_schema = (
-        TaxInvoice if doc_type == DocumentType.TAX_INVOICE else BankStatement
-    )
+    target_schema = TaxInvoiceSchema if doc_type == "TAX_INVOICE" else BankStatementSchema
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert Indian Chartered Accountant and financial document auditor. "
+                "Extract structured metadata including Vendor GSTIN, Invoice Number, Line Items, HSN/SAC, "
+                "CGST, SGST, IGST, and Total Amount. If any field is missing, set it to null."
+            ),
+        }
+    ]
+
+    user_content = []
+    if raw_text and raw_text.strip():
+        user_content.append({"type": "text", "text": f"Extracted Document Text:\n{raw_text[:4000]}"})
+    else:
+        user_content.append({"type": "text", "text": f"Analyze attached document image for filename: {filename}"})
+
+    for b64_img in base64_images:
+        user_content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"},
+            }
+        )
+
+    messages.append({"role": "user", "content": user_content})
 
     try:
         response = client.chat.completions.create(
-            model=settings.PRIMARY_EXTRACTION_MODEL,
+            model=model_name,
             response_model=target_schema,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert financial document auditor. "
-                        "Extract all requested fields accurately from the provided document text. "
-                        "If a value is missing or unclear, set it to null or default."
-                    ),
-                },
-                {"role": "user", "content": prompt_content},
-            ],
+            messages=messages,
             temperature=0.0,
         )
         data = json.loads(response.model_dump_json())
-        data["confidence_score"] = _calculate_confidence_score(data, extraction_method)
-        data["extraction_method"] = extraction_method
+        data["confidence_score"] = _calculate_confidence_score(data, f"AI_VISION ({model_name})")
+        data["extraction_method"] = f"AI_VISION ({model_name})"
+        data["doc_type"] = doc_type
         return data
-    except (GroqError, InstructorError, json.JSONDecodeError, ValueError) as e:
-        logger.error(
-            f"LLM extraction error: {e}. Falling back to default schema parsing."
-        )
-        fallback_data = _generate_fallback_extraction(doc_type, filename, raw_text)
-        fallback_data["confidence_score"] = _calculate_confidence_score(
-            fallback_data, extraction_method
-        )
-        fallback_data["extraction_method"] = extraction_method
-        return fallback_data
+    except Exception as e:
+        logger.error(f"LLM Vision extraction error: {e}. Falling back to default parser.")
+        fallback = _generate_fallback_extraction(doc_type, filename, raw_text)
+        fallback["confidence_score"] = _calculate_confidence_score(fallback, extraction_method)
+        fallback["extraction_method"] = extraction_method
+        fallback["doc_type"] = doc_type
+        return fallback
 
 
-def _generate_fallback_extraction(
-    doc_type: DocumentType, filename: str, text: str
-) -> dict:
-    """Generates basic structural JSON when live LLM parsing is offline."""
-    if doc_type == DocumentType.TAX_INVOICE:
+def _generate_fallback_extraction(doc_type: str, filename: str, text: str) -> dict:
+    if doc_type == "TAX_INVOICE":
         return {
             "vendor_name": "Extracted Vendor",
+            "vendor_gstin": None,
             "invoice_number": "INV-PENDING",
-            "total_amount": 0.0,
+            "invoice_date": None,
+            "taxable_amount": 0.0,
             "cgst_amount": 0.0,
             "sgst_amount": 0.0,
             "igst_amount": 0.0,
+            "total_amount": 0.0,
             "line_items": [],
             "raw_text_snippet": text[:200],
         }
-    else:
-        return {
-            "account_number": "ACC-PENDING",
-            "opening_balance": 0.0,
-            "closing_balance": 0.0,
-            "transactions": [],
-            "raw_text_snippet": text[:200],
-        }
+    return {
+        "bank_name": "Unknown Bank",
+        "account_number": "ACC-PENDING",
+        "opening_balance": 0.0,
+        "closing_balance": 0.0,
+        "raw_text_snippet": text[:200],
+    }
 
 
 class ExtractorService:
@@ -255,7 +237,7 @@ class ExtractorService:
         self,
         file_input: bytes | str,
         filename: str,
-        doc_type: DocumentType | None = None,
+        doc_type: str | None = None,
     ) -> dict:
         return extract_structured_data(file_input, filename, doc_type)
 
