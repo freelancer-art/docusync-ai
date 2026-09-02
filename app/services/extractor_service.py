@@ -23,6 +23,7 @@ class LineItem(BaseModel):
     unit_price: Optional[float] = Field(default=0.0, description="Price per unit")
     taxable_amount: Optional[float] = Field(default=0.0, description="Taxable amount before GST")
     gst_rate: Optional[float] = Field(default=0.0, description="GST Rate Percentage (e.g. 18.0)")
+    total_amount: Optional[float] = Field(default=0.0, description="Line item total including taxes")
 
 
 class TaxInvoiceSchema(BaseModel):
@@ -36,6 +37,7 @@ class TaxInvoiceSchema(BaseModel):
     cgst_amount: Optional[float] = Field(default=0.0, description="Central GST Amount")
     sgst_amount: Optional[float] = Field(default=0.0, description="State GST Amount")
     igst_amount: Optional[float] = Field(default=0.0, description="Integrated GST Amount")
+    tax_amount: Optional[float] = Field(default=0.0, description="Total Combined Tax Amount (CGST+SGST or IGST)")
     total_amount: Optional[float] = Field(default=0.0, description="Grand Total Invoice Amount")
     line_items: List[LineItem] = Field(default_factory=list, description="Itemized invoice rows")
 
@@ -141,7 +143,7 @@ def extract_structured_data(
     1. Extract text and convert PDF pages into vision images.
     2. Auto-classify document type.
     3. Invoke Vision LLM (Groq / Gemini) via instructor.
-    4. Compute complete confidence score and return schema.
+    4. Compute complete confidence score and return structured schema.
     """
     raw_text, extraction_method, file_bytes = extract_raw_text(file_input, filename)
 
@@ -156,6 +158,7 @@ def extract_structured_data(
         fallback = _generate_fallback_extraction(doc_type, filename, raw_text)
         fallback["confidence_score"] = _calculate_confidence_score(fallback, extraction_method)
         fallback["extraction_method"] = extraction_method
+        fallback["doc_type"] = doc_type
         return fallback
 
     target_schema = TaxInvoiceSchema if doc_type == "TAX_INVOICE" else BankStatementSchema
@@ -165,8 +168,8 @@ def extract_structured_data(
             "role": "system",
             "content": (
                 "You are an expert Indian Chartered Accountant and financial document auditor. "
-                "Extract structured metadata including Vendor GSTIN, Invoice Number, Line Items, HSN/SAC, "
-                "CGST, SGST, IGST, and Total Amount. If any field is missing, set it to null."
+                "Extract structured metadata including Vendor GSTIN, Buyer GSTIN, Invoice Number, Line Items, HSN/SAC, "
+                "CGST, SGST, IGST, Tax Amount, and Grand Total Amount. If any field is missing or absent, set it to null."
             ),
         }
     ]
@@ -195,6 +198,21 @@ def extract_structured_data(
             temperature=0.0,
         )
         data = json.loads(response.model_dump_json())
+
+        # Ensure tax_amount is computed if missing from individual tax heads
+        if doc_type == "TAX_INVOICE":
+            cgst = data.get("cgst_amount") or 0.0
+            sgst = data.get("sgst_amount") or 0.0
+            igst = data.get("igst_amount") or 0.0
+            if not data.get("tax_amount"):
+                data["tax_amount"] = round(cgst + sgst + igst, 2)
+            
+            # Alias customer_gstin to buyer_gstin for AuditEngine alignment
+            data["buyer_gstin"] = data.get("customer_gstin")
+            data["cgst"] = cgst
+            data["sgst"] = sgst
+            data["igst"] = igst
+
         data["confidence_score"] = _calculate_confidence_score(data, f"AI_VISION ({model_name})")
         data["extraction_method"] = f"AI_VISION ({model_name})"
         data["doc_type"] = doc_type
@@ -213,12 +231,19 @@ def _generate_fallback_extraction(doc_type: str, filename: str, text: str) -> di
         return {
             "vendor_name": "Extracted Vendor",
             "vendor_gstin": None,
+            "buyer_gstin": None,
+            "customer_name": None,
+            "customer_gstin": None,
             "invoice_number": "INV-PENDING",
             "invoice_date": None,
             "taxable_amount": 0.0,
             "cgst_amount": 0.0,
             "sgst_amount": 0.0,
             "igst_amount": 0.0,
+            "cgst": 0.0,
+            "sgst": 0.0,
+            "igst": 0.0,
+            "tax_amount": 0.0,
             "total_amount": 0.0,
             "line_items": [],
             "raw_text_snippet": text[:200],
