@@ -1,5 +1,5 @@
-from datetime import datetime
 import os
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 from passlib.context import CryptContext
@@ -33,10 +33,12 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
-    # Use explicit entity mapping instead of raw string paths
     documents: List["DocumentRecord"] = Relationship(
         back_populates="owner",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "post_update": True,
+        },
     )
 
     def verify_password(self, password: str) -> bool:
@@ -78,7 +80,6 @@ class DocumentRecord(SQLModel, table=True):
     client_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
-    # Direct relationship binding without string resolution ambiguities
     owner: Optional[User] = Relationship(back_populates="documents")
 
     def __init__(self, **data):
