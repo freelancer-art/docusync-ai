@@ -10,18 +10,6 @@ from app.services.gstin_validator import gstin_validator
 
 GSTIN_REGEX = r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
 
-GST_STATE_CODES = {
-    "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
-    "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
-    "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
-    "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
-    "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
-    "25": "Daman and Diu", "26": "Dadra and Nagar Haveli", "27": "Maharashtra", "28": "Andhra Pradesh (Old)",
-    "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
-    "34": "Puducherry", "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh",
-    "38": "Ladakh",
-}
-
 
 class VerificationService:
     @staticmethod
@@ -52,18 +40,18 @@ class VerificationService:
             )
         else:
             gstin_res = gstin_validator.verify_gstin(vendor_gstin)
-            if not gstin_res["valid"]:
+            if not gstin_res.get("valid"):
                 flags.append(
                     AuditFlag(
                         code="INVALID_GSTIN_CHECKSUM",
                         field="vendor_gstin",
                         severity="CRITICAL",
-                        message=f"Vendor GSTIN '{vendor_gstin}' failed checksum: {gstin_res['error']}",
+                        message=f"Vendor GSTIN '{vendor_gstin}' failed checksum: {gstin_res.get('error')}",
                     )
                 )
 
         # 2. Buyer GSTIN Format Validation
-        buyer_gstin = (invoice_data.get("buyer_gstin") or "").strip()
+        buyer_gstin = (invoice_data.get("buyer_gstin") or invoice_data.get("customer_gstin") or "").strip()
         if buyer_gstin and not re.match(GSTIN_REGEX, buyer_gstin):
             flags.append(
                 AuditFlag(
@@ -96,9 +84,9 @@ class VerificationService:
             vendor_state = vendor_gstin[:2]
             buyer_state = buyer_gstin[:2]
 
-            cgst = float(invoice_data.get("cgst") or 0.0)
-            sgst = float(invoice_data.get("sgst") or 0.0)
-            igst = float(invoice_data.get("igst") or 0.0)
+            cgst = float(invoice_data.get("cgst") or invoice_data.get("cgst_amount") or 0.0)
+            sgst = float(invoice_data.get("sgst") or invoice_data.get("sgst_amount") or 0.0)
+            igst = float(invoice_data.get("igst") or invoice_data.get("igst_amount") or 0.0)
 
             if vendor_state == buyer_state:
                 if igst > 0 and (cgst == 0 and sgst == 0):
@@ -125,17 +113,17 @@ class VerificationService:
         line_items = invoice_data.get("line_items", [])
         if line_items and isinstance(line_items, list):
             calculated_line_sum = sum(
-                float(item.get("total_amount", 0.0))
+                float(item.get("total_amount", item.get("taxable_amount", 0.0)))
                 for item in line_items
                 if isinstance(item, dict)
             )
-            if taxable_amount > 0 and abs(calculated_line_sum - taxable_amount) > 1.0:
+            if taxable_amount > 0 and abs(calculated_line_sum - taxable_amount) > 1.0 and abs(calculated_line_sum - total_amount) > 1.0:
                 flags.append(
                     AuditFlag(
                         code="LINE_ITEM_SUM_MISMATCH",
                         field="line_items",
                         severity="CRITICAL",
-                        message=f"Sum of line items ({calculated_line_sum:.2f}) does not equal taxable amount ({taxable_amount:.2f}).",
+                        message=f"Sum of line items ({calculated_line_sum:.2f}) does not equal taxable or total amount.",
                     )
                 )
 
@@ -143,7 +131,7 @@ class VerificationService:
         vendor_name = (invoice_data.get("vendor_name") or "").strip()
         invoice_number = (invoice_data.get("invoice_number") or "").strip()
 
-        if session and vendor_name and invoice_number:
+        if session and vendor_name and invoice_number and invoice_number not in ["INV-PENDING", "0", ""]:
             query = select(DocumentRecord).where(
                 DocumentRecord.vendor_name == vendor_name,
                 DocumentRecord.invoice_number == invoice_number,
@@ -163,7 +151,6 @@ class VerificationService:
                     )
                 )
 
-        # Determine Status
         has_critical = any(f.severity == "CRITICAL" for f in flags)
         has_warning = any(f.severity in ["WARNING", "HIGH"] for f in flags)
 
@@ -192,8 +179,6 @@ class VerificationService:
         1. Unusually high tax rates or incorrect tax calculations.
         2. Suspicious vendor names or placeholder values.
         3. Taxable vs total mismatches.
-        
-        Provide structured output with identified flags and an overall recommendation.
         """
 
         try:

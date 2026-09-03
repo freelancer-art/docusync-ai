@@ -87,10 +87,10 @@ class AuditEngine:
                 }
             )
 
-        # 3. LLM Anomaly Inspection
+        # 3. LLM Anomaly Inspection with Safe Exception Shield
         try:
             llm_result = verification_service.audit_with_llm_anomaly_check(raw_data)
-            if llm_result and getattr(llm_result, "detected_anomalies", None):
+            if llm_result and hasattr(llm_result, "detected_anomalies") and llm_result.detected_anomalies:
                 for anomaly in llm_result.detected_anomalies:
                     flags.append(
                         {

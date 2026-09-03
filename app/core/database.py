@@ -26,6 +26,7 @@ class UserRole(str, Enum):
 class DocumentRecord(SQLModel, table=True):
     __tablename__ = "documentrecord"
     __table_args__ = {"extend_existing": True}
+    __allow_unmapped__ = True
 
     id: Optional[int] = Field(default=None, primary_key=True)
     filename: str
@@ -45,7 +46,9 @@ class DocumentRecord(SQLModel, table=True):
 
     owner: Optional["User"] = Relationship(
         back_populates="documents",
-        sa_relationship_kwargs={"lazy": "joined"},
+        sa_relationship_kwargs={
+            "lazy": "joined",
+        },
     )
 
     def __init__(self, **data):
@@ -65,6 +68,7 @@ class DocumentRecord(SQLModel, table=True):
 class User(SQLModel, table=True):
     __tablename__ = "user"
     __table_args__ = {"extend_existing": True}
+    __allow_unmapped__ = True
 
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)

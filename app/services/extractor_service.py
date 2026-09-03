@@ -13,9 +13,7 @@ from app.core.groq_client import get_ai_client
 
 logger = logging.getLogger("docusync.extractor")
 
-# ------------------------------------------------------------------
-# Explicit Schema Definitions for Structured AI Extraction
-# ------------------------------------------------------------------
+
 class LineItem(BaseModel):
     description: Optional[str] = Field(default=None, description="Description of product or service")
     hsn_sac: Optional[str] = Field(default=None, description="HSN or SAC code")
@@ -138,13 +136,6 @@ def extract_structured_data(
     filename: str,
     doc_type: str | None = None,
 ) -> dict:
-    """
-    AI Vision Pipeline:
-    1. Extract text and convert PDF pages into vision images.
-    2. Auto-classify document type.
-    3. Invoke Vision LLM (Groq / Gemini) via instructor.
-    4. Compute complete confidence score and return structured schema.
-    """
     raw_text, extraction_method, file_bytes = extract_raw_text(file_input, filename)
 
     if not doc_type:
@@ -199,15 +190,15 @@ def extract_structured_data(
         )
         data = json.loads(response.model_dump_json())
 
-        # Ensure tax_amount is computed if missing from individual tax heads
         if doc_type == "TAX_INVOICE":
-            cgst = data.get("cgst_amount") or 0.0
-            sgst = data.get("sgst_amount") or 0.0
-            igst = data.get("igst_amount") or 0.0
-            if not data.get("tax_amount"):
+            cgst = float(data.get("cgst_amount") or 0.0)
+            sgst = float(data.get("sgst_amount") or 0.0)
+            igst = float(data.get("igst_amount") or 0.0)
+            
+            if not data.get("tax_amount") or data.get("tax_amount") == 0.0:
                 data["tax_amount"] = round(cgst + sgst + igst, 2)
             
-            # Alias customer_gstin to buyer_gstin for AuditEngine alignment
+            # Key fixes for verification alignment
             data["buyer_gstin"] = data.get("customer_gstin")
             data["cgst"] = cgst
             data["sgst"] = sgst
