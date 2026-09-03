@@ -9,8 +9,8 @@ It automates file ingestion, document type classification, OCR fallback processi
 ## 🌟 Key Features & Hardening
 
 * **Multi-Document Auto-Routing:** Automatically classifies incoming uploads into supported document schemas (`TAX_INVOICE`, `BANK_STATEMENT`)[cite: 14].
-* **Hybrid OCR Fallback Engine:** Extracts digital PDF text via `pdfplumber` with automatic fallback to **Tesseract OCR** for scanned images and low-quality PDFs[cite: 14].
-* **Deterministic Rule-Based Auditor:** Evaluates extracted metadata against Indian GSTIN regex rules, line-item mathematical sums, and tax balance logic to assign severity flags (`VERIFIED`, `NEEDS_REVIEW`, `REJECTED`)[cite: 14].
+* **Hybrid OCR & Vision Engine:** Extracts digital PDF text via `pdfplumber` with automatic fallback to **Tesseract OCR** and `pypdfium2`-based Gemini/Groq vision parsing[cite: 13, 14].
+* **Deterministic Rule-Based Auditor:** Evaluates extracted metadata against Indian GSTIN regex rules, line-item mathematical sums, and tax balance logic to assign severity flags (`VERIFIED`, `NEEDS_REVIEW`, `REJECTED`)[cite: 13, 14].
 * **Payment Reconciliation:** Tracks `payment_status` (`UNPAID`, `PARTIAL`, `PAID`), `amount_paid`, and `due_date` directly within the schema and user portal[cite: 10, 14].
 * **Multi-Tenant Database Persistence & RBAC:** Saves files, structured JSON, and audit summaries into SQLite via **SQLModel**, enforcing Role-Based Access Control (RBAC) separating `CA_ADMIN` and `CLIENT` access[cite: 10, 14].
 * **Thread-Safe Background Workers:** Decoupled asynchronous background tasks allow tests and execution workers to run cleanly over bound session engines without DB context mismatches.
@@ -18,7 +18,7 @@ It automates file ingestion, document type classification, OCR fallback processi
   * **Magic Byte Signature Check:** Validates raw headers (`b"%PDF"`, `b"\x89PNG"`, `b"\xff\xd8\xff"`) to block executable payloads disguised as PDFs[cite: 14].
   * **Path Traversal Protection:** Strips directory traversal sequences (`../../`) using model-level field validators[cite: 10, 14].
   * **CSV Injection Escaping:** Escapes formula prefixes (`=`, `+`, `-`, `@`) before generating Zoho Books CSV outputs[cite: 14].
-* **Accounting System Exporters:** Native export modules generate Zoho Books CSVs and Tally XML vouchers ready for direct accounting software imports[cite: 14].
+* **Accounting System Exporters:** Native export modules generate Zoho Books CSVs and Tally XML vouchers ready for direct accounting software imports[cite: 13, 14].
 * **Model Context Protocol (MCP) Server:** Native `FastMCP` tools enabling AI assistants (like Claude Desktop or Cursor) to query client document statuses and metrics using natural language[cite: 14].
 
 ---
@@ -49,7 +49,7 @@ docusync-ai/
 │   │   └── documents.py             # Document upload, RBAC, background worker & export routes
 │   ├── core/                        # Core infrastructure & engines
 │   │   ├── database.py              # SQLModel schemas (User, DocumentRecord) & engine init
-│   │   ├── groq_client.py          # Structured LLM extractor wrapper (Groq & Gemini)
+│   │   ├── groq_client.py           # Structured LLM extractor wrapper (Groq & Gemini)
 │   │   ├── ocr_engine.py            # Tesseract & pdfplumber extraction engine
 │   │   └── security.py              # Magic byte file validation & security rules
 │   ├── schemas/                     # Pydantic JSON schemas
@@ -62,23 +62,23 @@ docusync-ai/
 │   ├── services/                    # Business logic & export services
 │   │   ├── audit_engine.py          # Process audit flags & updates
 │   │   ├── extractor_service.py     # High-level OCR + LLM parsing orchestrator
-│   │   ├── gstin_validator.py        # GSTIN checksum & regex validator
+│   │   ├── gstin_validator.py       # GSTIN checksum & regex validator
 │   │   ├── parser.py                # Text parsing utility helpers
 │   │   ├── tally_exporter.py        # Tally XML voucher exporter
-│   │   ├── verification_service.py   # Rule-based validation logic
+│   │   ├── verification_service.py  # Rule-based validation logic
 │   │   └── zoho_exporter.py         # CSV injection-safe Zoho exporter
 │   ├── config.py                    # Pydantic environment configuration (graceful CI fallbacks)
 │   ├── dashboard.py                 # Streamlit CA & Client Web Portal
 │   └── main.py                      # FastAPI application entrypoint
 ├── storage/                         # Local SQLite DB and upload storage directory
 ├── tests/                           # Automated test suite (26 passing tests)
-│   ├── test_api_endpoints.py       # API, upload security, and RBAC tests
-│   ├── test_audit_engine.py        # Audit verification rule tests
-│   ├── test_auth_and_exports.py    # Exporter and auth helper tests
-│   ├── test_client_portal.py       # Multi-tenant view tests
-│   ├── test_extractor_service.py   # Multi-modal extraction and fallback unit tests
-│   ├── test_reconciliation.py      # Payment reconciliation tests
-│   └── test_security_hardening.py  # Security, path traversal & payload resilience tests
+│   ├── test_api_endpoints.py        # API, upload security, and RBAC tests
+│   ├── test_audit_engine.py         # Audit verification rule tests
+│   ├── test_auth_and_exports.py     # Exporter and auth helper tests
+│   ├── test_client_portal.py        # Multi-tenant view tests
+│   ├── test_extractor_service.py    # Multi-modal extraction and fallback unit tests
+│   ├── test_reconciliation.py       # Payment reconciliation tests
+│   └── test_security_hardening.py   # Security, path traversal & payload resilience tests
 ├── conftest.py                      # Global Pytest fixtures & isolated in-memory DB configuration
 ├── generate_test_pdf.py             # Helper utility generating sample synthetic PDFs
 ├── mcp_server.py                    # Model Context Protocol server entrypoint
@@ -190,15 +190,11 @@ uv run python mcp_server.py
 ## 📋 Project Roadmap
 
 * [x] **Phase 1:** Core FastAPI setup, Pydantic schemas, and LLM extraction engine.
-
-
 * [x] **Phase 2:** OCR Fallback Pipeline (Tesseract) & Auto-Classification Router.
-
-
 * [x] **Phase 3:** Vision Extraction & Structured Output Pipeline (`extractor_service.py`, `pypdfium2`, Gemini fallback).
 
 
-* [x] **Phase 4:** Deterministic Rule Audit Engine (GSTIN regex & math verification).
+* [ ] **Phase 4:** Deterministic Rule Audit Engine & Anomaly Inspector.
 
 
 * [x] **Phase 5:** SQLModel Database Persistence & FastMCP Server integration.

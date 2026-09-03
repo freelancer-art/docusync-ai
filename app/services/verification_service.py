@@ -101,7 +101,6 @@ class VerificationService:
             igst = float(invoice_data.get("igst") or 0.0)
 
             if vendor_state == buyer_state:
-                # Same state = Intra-State (CGST + SGST expected)
                 if igst > 0 and (cgst == 0 and sgst == 0):
                     flags.append(
                         AuditFlag(
@@ -112,7 +111,6 @@ class VerificationService:
                         )
                     )
             else:
-                # Different state = Inter-State (IGST expected)
                 if (cgst > 0 or sgst > 0) and igst == 0:
                     flags.append(
                         AuditFlag(
@@ -165,7 +163,7 @@ class VerificationService:
                     )
                 )
 
-        # Determine Overall Status
+        # Determine Status
         has_critical = any(f.severity == "CRITICAL" for f in flags)
         has_warning = any(f.severity in ["WARNING", "HIGH"] for f in flags)
 

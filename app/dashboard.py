@@ -1,11 +1,13 @@
 import io
 import json
 import os
+import re
 import tempfile
 from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.core.database import DocumentRecord, User, UserRole, engine, init_db
@@ -22,7 +24,6 @@ st.set_page_config(
 )
 
 
-# Cache database initial creation to prevent registry conflicts during Streamlit reloads
 @st.cache_resource
 def run_db_initialization():
     init_db()
@@ -165,7 +166,6 @@ st.title(
     f"📄 DocuSync AI: {'CA Master Ledger' if is_admin else 'Client Document Portal'}"
 )
 
-# Dynamically construct tabs based on role
 tab_titles = ["📤 Upload & Extract", "📋 Audit Ledger", "💬 Ask DocuSync AI", "📊 Analytics"]
 if is_admin:
     tab_titles.append("👥 Manage Accounts")
@@ -211,7 +211,6 @@ with tab_ingest:
                 tmp_path = tmp_file.name
 
             try:
-                # 1. Run extraction service
                 extraction_result = extractor_service.process_document(
                     file_input=tmp_path,
                     filename=uploaded_file.name,
@@ -220,7 +219,6 @@ with tab_ingest:
                 vendor_name = extraction_result.get("vendor_name")
                 total_amount = extraction_result.get("total_amount")
 
-                # 2. Save DocumentRecord
                 new_record = DocumentRecord(
                     client_id=target_client_id,
                     filename=uploaded_file.name,
@@ -240,7 +238,6 @@ with tab_ingest:
                     session.commit()
                     session.refresh(new_record)
 
-                    # 3. Trigger full deterministic & AI audit engine evaluation
                     audited_record = process_document_audit(new_record, session)
 
                 st.success(
@@ -260,7 +257,6 @@ with tab_ingest:
 with tab_audit:
     st.header("Document Audit Ledger")
 
-    # 1. GSTIN VERIFICATION TOOL
     with st.expander("🔍 Quick GSTIN Verification Tool"):
         st.caption(
             "Verify any Vendor GSTIN format, state code, PAN extraction, and Modulus 36 checksum validity."
@@ -282,7 +278,6 @@ with tab_audit:
 
     st.divider()
 
-    # 2. FILTER & EXPORT LAYOUT
     col_filter, col_export_csv, col_export_xlsx = st.columns([2, 1, 1])
     status_filter = col_filter.selectbox(
         "Filter by Status",
@@ -290,7 +285,6 @@ with tab_audit:
         key="audit_status_filter",
     )
 
-    # 3. DATABASE QUERY & AUDIT LEDGER RENDER
     with Session(engine) as session:
         query = select(DocumentRecord)
 
@@ -337,7 +331,6 @@ with tab_audit:
 
             df_export = pd.DataFrame(export_rows)
 
-            # CSV Stream
             csv_data = df_export.to_csv(index=False).encode("utf-8")
             col_export_csv.download_button(
                 label="📥 Export CSV",
@@ -347,7 +340,6 @@ with tab_audit:
                 key="download_csv",
             )
 
-            # Excel Stream
             excel_buffer = io.BytesIO()
             with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
                 df_export.to_excel(writer, index=False, sheet_name="Audit Ledger")
@@ -363,7 +355,6 @@ with tab_audit:
 
             st.divider()
 
-            # RECORD EXPANDERS & CA AUDIT CONTROLS
             for rec in records:
                 owner_user = session.get(User, rec.client_id) if rec.client_id else None
                 owner_name = owner_user.full_name if owner_user else "Unassigned"
@@ -477,61 +468,99 @@ with tab_audit:
 # ---------------------------------------------------------
 with tab_rag:
     st.header("💬 Ask DocuSync AI")
-    st.caption("Perform natural language queries over your tenant ledger data, audit flags, and tax totals.")
+    st.caption("Execute SQL analytics across your tenant ledger using natural language.")
 
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_query = st.chat_input("e.g. What is our total invoice exposure, and which records are flagged?")
+    user_query = st.chat_input("e.g. What is the total invoice amount for all REJECTED documents?")
 
     if user_query:
         st.session_state.chat_messages.append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
-        # Build ledger context from database
-        with Session(engine) as session:
-            query = select(DocumentRecord)
-            if not is_admin:
-                query = query.where(DocumentRecord.client_id == user.id)
-            doc_records = session.exec(query).all()
-
-            ledger_summary = []
-            for d in doc_records:
-                ledger_summary.append({
-                    "id": d.id,
-                    "vendor": d.vendor_name,
-                    "invoice_number": d.invoice_number,
-                    "total_amount": d.total_amount,
-                    "status": d.overall_status,
-                    "flags": json.loads(d.audit_flags_json) if d.audit_flags_json else [],
-                    "payment_status": d.payment_status,
-                })
-
-        # Synthesize answer using AI client
         client, model = get_ai_client()
         if not client or model == "NONE":
             response_text = "AI assistant client is not configured. Please set GROQ_API_KEY or GEMINI_API_KEY."
         else:
-            system_prompt = (
-                "You are an expert CA Assistant analyzing structured document records. "
-                "Answer the user's questions based strictly on the provided ledger context.\n\n"
-                f"Ledger Data:\n{json.dumps(ledger_summary, indent=2)}"
-            )
+            table_schema = """
+            Table name: documentrecord
+            Columns:
+            - id (INTEGER PRIMARY KEY)
+            - client_id (INTEGER)
+            - filename (VARCHAR)
+            - document_type (VARCHAR)
+            - vendor_name (VARCHAR)
+            - invoice_number (VARCHAR)
+            - total_amount (FLOAT)
+            - payment_status (VARCHAR)
+            - overall_status (VARCHAR) -- 'VERIFIED', 'NEEDS_REVIEW', 'REJECTED'
+            - audit_flags_json (TEXT)
+            - created_at (DATETIME)
+            """
+
+            sql_gen_prompt = f"""
+            You are an expert SQLite query generator for an accounting database.
+            Generate a single SELECT SQL query to answer the user's request.
+            
+            {table_schema}
+            
+            Rules:
+            1. Return ONLY raw executable SQL starting with SELECT inside standard text.
+            2. Do NOT perform any INSERT, UPDATE, DELETE, or DROP operations.
+            3. Do NOT include markdown code fences like ```sql.
+            
+            User Request: {user_query}
+            """
 
             try:
-                chat_res = client.chat.completions.create(
+                sql_res = client.chat.completions.create(
                     model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_query},
-                    ],
+                    messages=[{"role": "user", "content": sql_gen_prompt}],
+                    temperature=0.0,
+                )
+                generated_sql = sql_res.choices[0].message.content.strip()
+                generated_sql = re.sub(r"^```sql\s*|^```\s*|\s*```$", "", generated_sql, flags=re.MULTILINE).strip()
+
+                if not generated_sql.upper().startswith("SELECT"):
+                    raise ValueError("Security Violation: Generated statement is not a SELECT query.")
+
+                with Session(engine) as session:
+                    if not is_admin:
+                        if "WHERE" in generated_sql.upper():
+                            secure_sql = re.sub(
+                                r"(?i)WHERE",
+                                f"WHERE client_id = {user.id} AND (",
+                                generated_sql,
+                                count=1
+                            ) + ")"
+                        else:
+                            secure_sql = f"{generated_sql} WHERE client_id = {user.id}"
+                    else:
+                        secure_sql = generated_sql
+
+                    result_proxy = session.execute(text(secure_sql))
+                    query_results = [dict(row._mapping) for row in result_proxy]
+
+                synthesis_prompt = f"""
+                Synthesize a clear, concise accounting answer based on the SQL Query and Database Results below.
+                
+                Executed SQL: {secure_sql}
+                Database Output: {json.dumps(query_results, default=str)}
+                User Request: {user_query}
+                """
+
+                synth_res = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": synthesis_prompt}],
                     temperature=0.2,
                 )
-                response_text = chat_res.choices[0].message.content
+                response_text = synth_res.choices[0].message.content
+
             except Exception as e:
-                response_text = f"Error generating response: {e}"
+                response_text = f"Unable to execute SQL query cleanly: {str(e)}"
 
         with st.chat_message("assistant"):
             st.markdown(response_text)
