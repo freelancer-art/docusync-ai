@@ -19,10 +19,8 @@ from app.core.database import (
     DocumentRecord,
     User,
     UserRole,
-    get_session,
-)
-from app.core.database import (
     engine as default_engine,
+    get_session,
 )
 from app.core.security import (
     InvalidFileTypeError,

@@ -45,6 +45,7 @@ class DocumentRecord(SQLModel, table=True):
 
     owner: Optional["User"] = Relationship(
         back_populates="documents",
+        sa_relationship_kwargs={"lazy": "joined"},
     )
 
     def __init__(self, **data):
