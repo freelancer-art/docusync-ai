@@ -23,7 +23,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx poppler-utils
+          sudo apt-get install -y libgl1 poppler-utils
 
       - name: Upgrade pip and build tools
         run: |
