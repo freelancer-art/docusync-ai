@@ -80,7 +80,9 @@ class DocumentRecord(SQLModel, table=True):
     client_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
-    owner: Optional[User] = Relationship(back_populates="documents")
+    owner: Optional[User] = Relationship(
+        back_populates="documents",
+    )
 
     def __init__(self, **data):
         if "filename" in data and data["filename"]:
