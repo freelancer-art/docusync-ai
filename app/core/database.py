@@ -23,6 +23,44 @@ class UserRole(str, Enum):
     CLIENT = "CLIENT"
 
 
+class DocumentRecord(SQLModel, table=True):
+    __tablename__ = "documentrecord"
+    __table_args__ = {"extend_existing": True}
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    filename: str
+    document_type: str = "INVOICE"
+    extraction_method: str = "AI_VISION"
+    overall_status: str = "NEEDS_REVIEW"
+    vendor_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    total_amount: Optional[float] = 0.0
+    amount_paid: Optional[float] = 0.0
+    payment_status: str = "UNPAID"
+    audit_flags_json: Optional[str] = "[]"
+    raw_json_data: Optional[str] = None
+    auditor_notes: Optional[str] = None
+    client_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
+    owner: Optional["User"] = Relationship(
+        back_populates="documents",
+    )
+
+    def __init__(self, **data):
+        if "filename" in data and data["filename"]:
+            data["filename"] = self.sanitize_filename(data["filename"])
+        super().__init__(**data)
+
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        if not filename:
+            return "unnamed_document"
+        clean_name = os.path.basename(filename.replace("\\", "/"))
+        clean_name = clean_name.replace("..", "").strip()
+        return clean_name or "unnamed_document"
+
+
 class User(SQLModel, table=True):
     __tablename__ = "user"
     __table_args__ = {"extend_existing": True}
@@ -33,7 +71,7 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
-    documents: List["DocumentRecord"] = Relationship(
+    documents: List[DocumentRecord] = Relationship(
         back_populates="owner",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
@@ -58,44 +96,6 @@ class User(SQLModel, table=True):
             return password
         truncated_pwd = safe_truncate_password(password)
         return pwd_context.hash(truncated_pwd)
-
-
-class DocumentRecord(SQLModel, table=True):
-    __tablename__ = "documentrecord"
-    __table_args__ = {"extend_existing": True}
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    filename: str
-    document_type: str = "INVOICE"
-    extraction_method: str = "AI_VISION"
-    overall_status: str = "NEEDS_REVIEW"
-    vendor_name: Optional[str] = None
-    invoice_number: Optional[str] = None
-    total_amount: Optional[float] = 0.0
-    amount_paid: Optional[float] = 0.0
-    payment_status: str = "UNPAID"
-    audit_flags_json: Optional[str] = "[]"
-    raw_json_data: Optional[str] = None
-    auditor_notes: Optional[str] = None
-    client_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-    owner: Optional[User] = Relationship(
-        back_populates="documents",
-    )
-
-    def __init__(self, **data):
-        if "filename" in data and data["filename"]:
-            data["filename"] = self.sanitize_filename(data["filename"])
-        super().__init__(**data)
-
-    @staticmethod
-    def sanitize_filename(filename: str) -> str:
-        if not filename:
-            return "unnamed_document"
-        clean_name = os.path.basename(filename.replace("\\", "/"))
-        clean_name = clean_name.replace("..", "").strip()
-        return clean_name or "unnamed_document"
 
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./docusync.db")
