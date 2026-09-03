@@ -44,7 +44,11 @@ if "chat_messages" not in st.session_state:
 if not st.session_state.authenticated:
     st.title("🔒 DocuSync AI Portal")
 
-    auth_mode = st.radio("Select Action", ["Sign In", "Register New CA Firm"], horizontal=True)
+    auth_mode = st.radio(
+        "Select Action",
+        ["Sign In", "Register New CA Firm", "Register Client"],
+        horizontal=True,
+    )
 
     col1, _ = st.columns([1, 2])
 
@@ -64,7 +68,8 @@ if not st.session_state.authenticated:
                         st.rerun()
                     else:
                         st.error("Invalid credentials.")
-        else:
+
+        elif auth_mode == "Register New CA Firm":
             st.subheader("CA Firm Registration")
             new_username = st.text_input("Admin Username")
             new_fullname = st.text_input("CA Firm / Admin Name")
@@ -90,6 +95,33 @@ if not st.session_state.authenticated:
                             session.add(ca_user)
                             session.commit()
                             st.success("CA Account created successfully! Please sign in.")
+
+        elif auth_mode == "Register Client":
+            st.subheader("Client Registration")
+            client_username = st.text_input("Client Username")
+            client_fullname = st.text_input("Client / Company Name")
+            client_password = st.text_input("Password", type="password")
+
+            if st.button("Register Client Account", type="primary"):
+                if not client_username or not client_fullname or not client_password:
+                    st.error("Please fill out all fields.")
+                else:
+                    with Session(engine) as session:
+                        existing_user = session.exec(
+                            select(User).where(User.username == client_username)
+                        ).first()
+                        if existing_user:
+                            st.error(f"Username '{client_username}' is already registered.")
+                        else:
+                            client_user = User(
+                                username=client_username,
+                                full_name=client_fullname,
+                                hashed_password=User.hash_password(client_password),
+                                role=UserRole.CLIENT,
+                            )
+                            session.add(client_user)
+                            session.commit()
+                            st.success("Client Account created successfully! Please sign in.")
 
     st.stop()
 
