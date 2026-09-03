@@ -1,9 +1,8 @@
 import json
 from typing import Any
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.database import DocumentRecord
-from app.schemas.verification import AuditFlag
 from app.services.verification_service import verification_service
 
 
@@ -28,7 +27,7 @@ class AuditEngine:
                     }
                 )
 
-        # Ensure minimal top-level attributes are present
+        # Sync top-level attributes to dictionary payload
         if not raw_data.get("total_amount") and doc.total_amount:
             raw_data["total_amount"] = doc.total_amount
         if not raw_data.get("vendor_name") and doc.vendor_name:
@@ -36,28 +35,26 @@ class AuditEngine:
         if not raw_data.get("invoice_number") and doc.invoice_number:
             raw_data["invoice_number"] = doc.invoice_number
 
-        # 1. Run VerificationService Deterministic Audit Suite
-        if hasattr(verification_service, "audit_tax_invoice"):
-            try:
-                audit_result = verification_service.audit_tax_invoice(
-                    invoice_data=raw_data,
-                    session=session,
-                    current_doc_id=doc.id,
-                )
+        # 1. Deterministic Verification Suite
+        try:
+            audit_result = verification_service.audit_tax_invoice(
+                invoice_data=raw_data,
+                session=session,
+                current_doc_id=doc.id,
+            )
+            for flag in audit_result.flags:
+                flags.append(flag.model_dump())
+        except Exception as e:
+            flags.append(
+                {
+                    "code": "VERIFICATION_SERVICE_ERROR",
+                    "field": "verification_service",
+                    "severity": "WARNING",
+                    "message": f"Verification service encountered an error: {str(e)}",
+                }
+            )
 
-                for flag in audit_result.flags:
-                    flags.append(flag.model_dump())
-            except Exception as e:
-                flags.append(
-                    {
-                        "code": "VERIFICATION_SERVICE_ERROR",
-                        "field": "verification_service",
-                        "severity": "WARNING",
-                        "message": f"Verification service encountered an error: {str(e)}",
-                    }
-                )
-
-        # 2. Check Minimal Document Properties
+        # 2. Minimal Document Property Guardrails
         if not doc.total_amount or doc.total_amount <= 0:
             flags.append(
                 {
@@ -90,7 +87,23 @@ class AuditEngine:
                 }
             )
 
-        # Determine Final Overall Review Status
+        # 3. LLM Anomaly Inspection
+        try:
+            llm_result = verification_service.audit_with_llm_anomaly_check(raw_data)
+            if llm_result and getattr(llm_result, "detected_anomalies", None):
+                for anomaly in llm_result.detected_anomalies:
+                    flags.append(
+                        {
+                            "code": "AI_ANOMALY_DETECTED",
+                            "field": getattr(anomaly, "field", "general"),
+                            "severity": getattr(anomaly, "severity", "HIGH"),
+                            "message": f"[AI Audit] {getattr(anomaly, 'description', '')}",
+                        }
+                    )
+        except Exception:
+            pass  # Non-blocking fallthrough if LLM provider is unavailable
+
+        # 4. Final Review Status Determination
         has_critical = any(f.get("severity") == "CRITICAL" for f in flags)
         has_warning = any(f.get("severity") in ["WARNING", "HIGH"] for f in flags)
 

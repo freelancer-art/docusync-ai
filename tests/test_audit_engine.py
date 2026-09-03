@@ -110,7 +110,7 @@ def test_tally_exporter_xml_structure():
     assert "1500.0" in xml_str
 
 
-# --- PHASE 4: AI ANOMALY ENGINE TESTS ---
+# --- PHASE 4: AUDIT & ANOMALY ENGINE TESTS ---
 
 
 def test_arithmetic_verification_mismatch():
