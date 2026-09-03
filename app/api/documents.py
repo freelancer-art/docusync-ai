@@ -1,180 +1,220 @@
+import csv
+import io
 import json
-import os
-
-import aiofiles
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    File,
-    HTTPException,
-    UploadFile,
-    status,
-)
-from fastapi.responses import Response
-from sqlalchemy import Engine
+import xml.etree.ElementTree as ET
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.core.database import (
-    DocumentRecord,
-    User,
-    UserRole,
-    engine as default_engine,
-    get_session,
-)
-from app.core.security import (
-    InvalidFileTypeError,
-    get_current_user,
-    validate_file_signature,
-)
-from app.services import tally_exporter, zoho_exporter
-from app.services.audit_engine import process_document_audit
-from app.services.extractor_service import extract_structured_data
+from app.api.auth import get_current_user
+from app.core.database import DocumentRecord, User, UserRole, get_session
 
-router = APIRouter(prefix="/api/documents", tags=["documents"])
-
-UPLOAD_DIR = "storage/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
-def run_document_processing_pipeline(doc_id: int, db_engine: Engine | None = None):
-    """Async background worker: runs text extraction, structured parsing & audit checks."""
-    target_engine = db_engine or default_engine
-    with Session(target_engine) as session:
-        doc = session.get(DocumentRecord, doc_id)
-        if not doc:
-            return
-
-        file_path = os.path.join(UPLOAD_DIR, doc.filename)
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, "rb") as f:
-                    content = f.read()
-
-                # 1. Run live/fallback structured extraction
-                extracted_data = extract_structured_data(content, doc.filename)
-
-                # 2. Update DocumentRecord with extracted details
-                doc.raw_json_data = json.dumps(extracted_data)
-                doc.vendor_name = extracted_data.get("vendor_name")
-                doc.invoice_number = extracted_data.get("invoice_number")
-                doc.total_amount = extracted_data.get("total_amount", 0.0)
-            except (OSError, ValueError) as e:
-                doc.overall_status = "FAILED"
-                doc.raw_json_data = json.dumps({"error": str(e)})
-
-        # 3. Trigger audit rule engine
-        process_document_audit(doc, session)
+class DocumentUpdateSchema(BaseModel):
+    vendor_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    total_amount: Optional[float] = None
+    overall_status: Optional[str] = None
+    auditor_notes: Optional[str] = None
 
 
-@router.post("/upload", response_model=dict)
-async def upload_document(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
+@router.get("/", response_model=List[DocumentRecord])
+def get_documents(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ):
-    content = await file.read()
-
-    try:
-        validate_file_signature(content)
-    except InvalidFileTypeError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-    safe_filename = DocumentRecord.sanitize_filename(file.filename or "uploaded_doc.pdf")
-
-    doc_record = DocumentRecord(
-        filename=safe_filename,
-        document_type="INVOICE",
-        extraction_method="AI_VISION",
-        overall_status="PENDING",
-        client_id=current_user.id,
-        raw_json_data="{}",
-        audit_flags_json="[]",
-    )
-
-    file_path = os.path.join(UPLOAD_DIR, doc_record.filename)
-    async with aiofiles.open(file_path, "wb") as buffer:
-        await buffer.write(content)
-
-    session.add(doc_record)
-    session.commit()
-    session.refresh(doc_record)
-
-    background_tasks.add_task(
-        run_document_processing_pipeline, doc_record.id, session.get_bind()
-    )
-
-    return {
-        "id": doc_record.id,
-        "filename": doc_record.filename,
-        "status": doc_record.overall_status,
-        "client_id": doc_record.client_id,
-    }
-
-
-@router.get("/{doc_id}", response_model=dict)
-async def get_document(
-    doc_id: int,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-):
-    doc = session.get(DocumentRecord, doc_id)
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
-        )
-
-    if current_user.role != UserRole.CA_ADMIN and doc.client_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
-
-    return {
-        "id": doc.id,
-        "filename": doc.filename,
-        "status": doc.overall_status,
-        "client_id": doc.client_id,
-    }
-
-
-@router.get("/export/zoho")
-async def export_zoho_csv(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-):
+    """
+    Fetch documents scoped by user role (CA_ADMIN sees all, CLIENT sees owned documents).
+    """
     query = select(DocumentRecord)
+
     if current_user.role != UserRole.CA_ADMIN:
         query = query.where(DocumentRecord.client_id == current_user.id)
 
-    records = session.exec(query).all()
-    if not records:
-        raise HTTPException(status_code=404, detail="No documents available to export")
+    if status_filter and status_filter.upper() != "ALL":
+        query = query.where(DocumentRecord.overall_status == status_filter.upper())
 
-    csv_bytes = zoho_exporter.generate_bills_csv(records)
+    records = db.exec(query).all()
+    return records
+
+
+@router.get("/export/zoho")
+def export_zoho_csv(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Export verified document records formatted as Zoho Books CSV.
+    """
+    if current_user.role != UserRole.CA_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only CA_ADMIN can export document records",
+        )
+
+    query = select(DocumentRecord).where(DocumentRecord.overall_status == "VERIFIED")
+    records = db.exec(query).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Invoice Number",
+        "Vendor Name",
+        "Document Type",
+        "Total Amount",
+        "Status",
+        "Created At",
+    ])
+
+    for doc in records:
+        writer.writerow([
+            doc.invoice_number or "",
+            doc.vendor_name or "",
+            doc.document_type,
+            doc.total_amount or 0.0,
+            doc.overall_status,
+            doc.created_at.isoformat() if doc.created_at else "",
+        ])
+
     return Response(
-        content=csv_bytes,
+        content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=zoho_bills.csv"},
+        headers={"Content-Disposition": "attachment; filename=zoho_export.csv"},
     )
 
 
 @router.get("/export/tally")
-async def export_tally_xml(
+def export_tally_xml(
+    db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ):
-    query = select(DocumentRecord)
+    """
+    Export verified document records formatted as Tally ERP XML.
+    """
     if current_user.role != UserRole.CA_ADMIN:
-        query = query.where(DocumentRecord.client_id == current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only CA_ADMIN can export document records",
+        )
 
-    records = session.exec(query).all()
-    if not records:
-        raise HTTPException(status_code=404, detail="No documents available to export")
+    query = select(DocumentRecord).where(DocumentRecord.overall_status == "VERIFIED")
+    records = db.exec(query).all()
 
-    xml_content = tally_exporter.generate_vouchers_xml(records)
+    envelope = ET.Element("ENVELOPE")
+    header = ET.SubElement(envelope, "HEADER")
+    tally_req = ET.SubElement(header, "TALLYREQUEST")
+    tally_req.text = "Import Data"
+
+    body = ET.SubElement(envelope, "BODY")
+    import_data = ET.SubElement(body, "IMPORTDATA")
+    request_data = ET.SubElement(import_data, "REQUESTDATA")
+
+    for doc in records:
+        voucher = ET.SubElement(
+            request_data, "VOUCHER", VCHTYPE="Purchase", ACTION="Create"
+        )
+        party = ET.SubElement(voucher, "PARTYLEDGERNAME")
+        party.text = doc.vendor_name or "Unknown Vendor"
+
+        inv_num = ET.SubElement(voucher, "VOUCHERNUMBER")
+        inv_num.text = doc.invoice_number or ""
+
+        amount = ET.SubElement(voucher, "AMOUNT")
+        amount.text = str(doc.total_amount or 0.0)
+
+    xml_data = ET.tostring(envelope, encoding="utf-8", xml_declaration=True).decode("utf-8")
+
     return Response(
-        content=xml_content,
+        content=xml_data,
         media_type="application/xml",
-        headers={"Content-Disposition": "attachment; filename=tally_vouchers.xml"},
+        headers={"Content-Disposition": "attachment; filename=tally_export.xml"},
     )
+
+
+@router.get("/{document_id}", response_model=DocumentRecord)
+def get_document_by_id(
+    document_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retrieve details for a specific document by ID.
+    """
+    record = db.get(DocumentRecord, document_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    if (
+        current_user.role != UserRole.CA_ADMIN
+        and record.client_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this document",
+        )
+
+    return record
+
+
+@router.patch("/{document_id}", response_model=DocumentRecord)
+def update_document_audit(
+    document_id: int,
+    payload: DocumentUpdateSchema,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update document metadata and status (Restricted to CA_ADMIN).
+    """
+    if current_user.role != UserRole.CA_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only CA_ADMIN can modify document audit status",
+        )
+
+    record = db.get(DocumentRecord, document_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(record, field, value)
+
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Delete a document record (Restricted to CA_ADMIN).
+    """
+    if current_user.role != UserRole.CA_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only CA_ADMIN can delete documents",
+        )
+
+    record = db.get(DocumentRecord, document_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    db.delete(record)
+    db.commit()
+    return None
