@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -45,7 +45,7 @@ class DocumentRecord(SQLModel, table=True):
     raw_json_data: str | None = None
     auditor_notes: str | None = None
     client_id: int | None = Field(default=None, foreign_key="user.id")
-    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     owner: Optional["User"] = Relationship(
         back_populates="documents",

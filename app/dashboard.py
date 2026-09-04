@@ -2,7 +2,7 @@ import io
 import json
 import os
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
@@ -230,7 +230,7 @@ with tab_ingest:
                     overall_status="NEEDS_REVIEW",
                     raw_json_data=json.dumps(extraction_result),
                     audit_flags_json=json.dumps([]),
-                    created_at=datetime.now(UTC),
+                    created_at=datetime.now(timezone.utc),
                 )
 
                 with Session(engine) as session:

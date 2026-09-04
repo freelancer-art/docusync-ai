@@ -9,6 +9,7 @@
 - **Core Infrastructure & UI:** Completed ✅
 - **Phase 3: AI Vision Extraction Engine:** Completed ✅[cite: 13]
 - **Phase 4: AI Anomaly Engine & RAG Chat Assistant:** Completed ✅
+- **Phase 5: MCP Accounting Agent Tooling:** In Progress 🚧
 - **Phase 1: Persistence & Supabase Storage:** Deferred ⏸️
 - **Phase 2: Multi-Tenant User Management:** Completed ✅
 
@@ -144,6 +145,33 @@ Test baseline:
   * [x] Interactive chat component exists in Streamlit.
   * [x] Natural-language tenant ledger queries are supported through LLM-generated SQL.
   * [x] SQL execution is constrained by `build_safe_ledger_query`, tenant scoped with bound parameters, and synthesized into direct answers.
+
+---
+
+## 🚧 Phase 5: MCP Accounting Agent Tooling (In Progress)
+
+**Goal:** Expose DocuSync accounting workflows as safe, structured tools that AI agents can call without raw database access.
+
+* [x] **Stabilize Existing MCP Tools (`app/mcp_server.py`)**
+  * [x] Return structured JSON for document lookup, flagged records, and financial summaries.
+  * [x] Handle missing documents and malformed JSON without crashing the MCP server.
+  * [x] Cover the MCP server surface with isolated database tests.
+* [x] **Add AI-Useful Read/Export Tools**
+  * [x] `validate_gstin(gstin)` for GSTIN format/checksum/state/PAN validation.
+  * [x] `search_documents(...)` with client, status, vendor, invoice, date, and bounded limit filters.
+  * [x] `explain_audit_flags(doc_id)` with severity counts and recommended review action.
+  * [x] `find_duplicate_invoices(client_id)` to identify duplicate vendor/invoice combinations.
+  * [x] `summarize_client_tax_position(...)` for totals, status counts, and estimated GST credit.
+  * [x] `prepare_accounting_export(...)` for Tally XML and Zoho CSV export previews.
+* [ ] **Guarded Mutation Tools**
+  * [ ] Add explicit confirmation-token flow before mutating tools such as reconciliation, status override, export persistence, or account creation.
+  * [ ] Add audit logging for every MCP tool invocation, including actor, tool name, arguments summary, and outcome.
+* [ ] **Replace Streamlit Raw SQL RAG Path**
+  * [ ] Route assistant answers through the MCP-style tool layer instead of direct LLM-generated SQL execution.
+  * [ ] Add tool-call orchestration tests for common accounting questions.
+* [ ] **External MCP/Connector Intake**
+  * [ ] Design Google Drive/Dropbox/Gmail document intake tools.
+  * [ ] Define connector-safe tenant mapping and deduplication behavior before importing external files.
 
 ---
 
