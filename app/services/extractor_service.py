@@ -2,12 +2,11 @@ import base64
 import io
 import json
 import logging
-from typing import Any, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any
 
 import pypdfium2 as pdfium
+from pydantic import BaseModel, Field
 
-from app.config import settings
 from app.core import ocr_engine
 from app.core.groq_client import get_ai_client
 
@@ -15,40 +14,40 @@ logger = logging.getLogger("docusync.extractor")
 
 
 class LineItem(BaseModel):
-    description: Optional[str] = Field(default=None, description="Description of product or service")
-    hsn_sac: Optional[str] = Field(default=None, description="HSN or SAC code")
-    quantity: Optional[float] = Field(default=0.0, description="Quantity")
-    unit_price: Optional[float] = Field(default=0.0, description="Price per unit")
-    taxable_amount: Optional[float] = Field(default=0.0, description="Taxable amount before GST")
-    gst_rate: Optional[float] = Field(default=0.0, description="GST Rate Percentage (e.g. 18.0)")
-    total_amount: Optional[float] = Field(default=0.0, description="Line item total including taxes")
+    description: str | None = Field(default=None, description="Description of product or service")
+    hsn_sac: str | None = Field(default=None, description="HSN or SAC code")
+    quantity: float | None = Field(default=0.0, description="Quantity")
+    unit_price: float | None = Field(default=0.0, description="Price per unit")
+    taxable_amount: float | None = Field(default=0.0, description="Taxable amount before GST")
+    gst_rate: float | None = Field(default=0.0, description="GST Rate Percentage (e.g. 18.0)")
+    total_amount: float | None = Field(default=0.0, description="Line item total including taxes")
 
 
 class TaxInvoiceSchema(BaseModel):
-    vendor_name: Optional[str] = Field(default=None, description="Legal Name of the Vendor/Supplier")
-    vendor_gstin: Optional[str] = Field(default=None, description="15-digit GSTIN of the Vendor")
-    customer_name: Optional[str] = Field(default=None, description="Legal Name of the Recipient/Client")
-    customer_gstin: Optional[str] = Field(default=None, description="15-digit GSTIN of the Recipient")
-    invoice_number: Optional[str] = Field(default=None, description="Invoice or Bill Reference Number")
-    invoice_date: Optional[str] = Field(default=None, description="Date of Invoice issuance (YYYY-MM-DD)")
-    taxable_amount: Optional[float] = Field(default=0.0, description="Total Taxable Value")
-    cgst_amount: Optional[float] = Field(default=0.0, description="Central GST Amount")
-    sgst_amount: Optional[float] = Field(default=0.0, description="State GST Amount")
-    igst_amount: Optional[float] = Field(default=0.0, description="Integrated GST Amount")
-    tax_amount: Optional[float] = Field(default=0.0, description="Total Combined Tax Amount (CGST+SGST or IGST)")
-    total_amount: Optional[float] = Field(default=0.0, description="Grand Total Invoice Amount")
-    line_items: List[LineItem] = Field(default_factory=list, description="Itemized invoice rows")
+    vendor_name: str | None = Field(default=None, description="Legal Name of the Vendor/Supplier")
+    vendor_gstin: str | None = Field(default=None, description="15-digit GSTIN of the Vendor")
+    customer_name: str | None = Field(default=None, description="Legal Name of the Recipient/Client")
+    customer_gstin: str | None = Field(default=None, description="15-digit GSTIN of the Recipient")
+    invoice_number: str | None = Field(default=None, description="Invoice or Bill Reference Number")
+    invoice_date: str | None = Field(default=None, description="Date of Invoice issuance (YYYY-MM-DD)")
+    taxable_amount: float | None = Field(default=0.0, description="Total Taxable Value")
+    cgst_amount: float | None = Field(default=0.0, description="Central GST Amount")
+    sgst_amount: float | None = Field(default=0.0, description="State GST Amount")
+    igst_amount: float | None = Field(default=0.0, description="Integrated GST Amount")
+    tax_amount: float | None = Field(default=0.0, description="Total Combined Tax Amount (CGST+SGST or IGST)")
+    total_amount: float | None = Field(default=0.0, description="Grand Total Invoice Amount")
+    line_items: list[LineItem] = Field(default_factory=list, description="Itemized invoice rows")
 
 
 class BankStatementSchema(BaseModel):
-    bank_name: Optional[str] = Field(default=None, description="Name of the Bank")
-    account_number: Optional[str] = Field(default=None, description="Bank Account Number")
-    statement_period: Optional[str] = Field(default=None, description="Date Range of Statement")
-    opening_balance: Optional[float] = Field(default=0.0, description="Opening Balance")
-    closing_balance: Optional[float] = Field(default=0.0, description="Closing Balance")
+    bank_name: str | None = Field(default=None, description="Name of the Bank")
+    account_number: str | None = Field(default=None, description="Bank Account Number")
+    statement_period: str | None = Field(default=None, description="Date Range of Statement")
+    opening_balance: float | None = Field(default=0.0, description="Opening Balance")
+    closing_balance: float | None = Field(default=0.0, description="Closing Balance")
 
 
-def convert_pdf_to_images_base64(file_bytes: bytes, max_pages: int = 2) -> List[str]:
+def convert_pdf_to_images_base64(file_bytes: bytes, max_pages: int = 2) -> list[str]:
     """Renders PDF pages to base64 JPEG strings for Multi-Modal Vision processing."""
     base64_images = []
     try:
@@ -62,7 +61,7 @@ def convert_pdf_to_images_base64(file_bytes: bytes, max_pages: int = 2) -> List[
             pil_image.save(buffer, format="JPEG", quality=85)
             img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
             base64_images.append(img_str)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning(f"Failed PDF page rendering to Vision base64: {e}")
     return base64_images
 
@@ -87,12 +86,12 @@ def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str, 
             if isinstance(res, tuple):
                 return res[0], res[1], file_bytes
             return res, "pdfplumber_or_ocr", file_bytes
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"OCR engine extraction error: {e}")
 
     try:
         return file_bytes.decode("utf-8", errors="ignore"), "raw_bytes_fallback", file_bytes
-    except Exception:
+    except Exception:  # noqa: BLE001
         return "", "FAILED", file_bytes
 
 
@@ -208,7 +207,7 @@ def extract_structured_data(
         data["extraction_method"] = f"AI_VISION ({model_name})"
         data["doc_type"] = doc_type
         return data
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"LLM Vision extraction error: {e}. Falling back to default parser.")
         fallback = _generate_fallback_extraction(doc_type, filename, raw_text)
         fallback["confidence_score"] = _calculate_confidence_score(fallback, extraction_method)

@@ -2,9 +2,9 @@ services:
   web:
     build: .
     container_name: docusync_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT:-8000} --reload
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:${API_PORT:-8000}"
     volumes:
       - .:/app
       - docusync_storage:/app/storage
@@ -34,9 +34,9 @@ services:
   dashboard:
     build: .
     container_name: docusync_dashboard
-    command: streamlit run app/dashboard.py --server.port 8501 --server.address 0.0.0.0
+    command: streamlit run app/dashboard.py --server.port ${STREAMLIT_PORT:-8501} --server.address 0.0.0.0
     ports:
-      - "8501:8501"
+      - "${STREAMLIT_PORT:-8501}:${STREAMLIT_PORT:-8501}"
     volumes:
       - .:/app
       - docusync_storage:/app/storage

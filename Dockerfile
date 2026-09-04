@@ -24,4 +24,7 @@ COPY . /app
 
 EXPOSE 8000 8501
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV API_HOST=0.0.0.0
+ENV API_PORT=8000
+
+CMD ["sh", "-c", "uvicorn app.main:app --host ${API_HOST} --port ${API_PORT}"]

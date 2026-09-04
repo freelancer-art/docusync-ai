@@ -1,17 +1,14 @@
 import json
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from app.services.extractor_service import (
-    TaxInvoiceSchema,
-    LineItem,
-    BankStatementSchema,
-    extract_structured_data,
-    classify_document_text,
-    _calculate_confidence_score,
-)
-from app.services.audit_engine import AuditEngine
 from app.core.database import DocumentRecord
+from app.services.audit_engine import AuditEngine
+from app.services.extractor_service import (
+    LineItem,
+    TaxInvoiceSchema,
+    classify_document_text,
+    extract_structured_data,
+)
 
 
 class TestExtractorSchemas:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Set default PORT to 10000 if not set by environment
-PORT="${PORT:-10000}"
+# Set default PORT to DEFAULT_PLATFORM_PORT if not set by environment
+PORT="${PORT:-${DEFAULT_PLATFORM_PORT:-10000}}"
 
 # Start Celery worker in the background
 celery -A app.core.celery_app.celery_app worker --loglevel=info -c 2 &

@@ -1,5 +1,6 @@
 import os
 import runpy
+
 import streamlit as st
 
 # Inject Streamlit secrets into os.environ for Pydantic/SQLAlchemy compatibility

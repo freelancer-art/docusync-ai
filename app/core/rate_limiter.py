@@ -8,7 +8,7 @@ from app.config import settings
 # Global Redis client initialization with standard timeout
 try:
     redis_client = redis.Redis.from_url(
-        getattr(settings, "REDIS_URL", "redis://localhost:6379/0"),
+        settings.REDIS_URL,
         decode_responses=True,
         socket_timeout=2,
     )

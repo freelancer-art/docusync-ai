@@ -1,9 +1,9 @@
 import logging
-from typing import Any
-from groq import Groq, GroqError
+
 import instructor
-from instructor import Instructor
 from google import genai
+from groq import Groq, GroqError
+from instructor import Instructor
 
 from app.config import settings
 
@@ -19,7 +19,7 @@ def get_groq_client() -> Instructor | None:
     try:
         raw_client = Groq(api_key=api_key)
         return instructor.from_groq(raw_client)
-    except (GroqError, ValueError, RuntimeError, Exception) as e:
+    except (GroqError, ValueError, RuntimeError, Exception) as e:  # noqa: BLE001
         logger.error(f"Failed to initialize Groq client: {e}")
         return None
 
@@ -34,7 +34,7 @@ def get_gemini_client() -> Instructor | None:
         raw_client = genai.Client(api_key=api_key)
         # Wrap Google GenAI client with explicit GEMINI_JSON mode for instructor compatibility
         return instructor.from_provider(raw_client, mode=instructor.Mode.GEMINI_JSON)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to initialize Gemini client: {e}")
         return None
 
@@ -51,7 +51,7 @@ def get_ai_client() -> tuple[Instructor | None, str]:
 
     gemini_client = get_gemini_client()
     if gemini_client:
-        model = getattr(settings, "VISION_EXTRACTION_MODEL", "gemini-2.5-flash")
+        model = settings.VISION_EXTRACTION_MODEL
         return gemini_client, model
 
     return None, "NONE"

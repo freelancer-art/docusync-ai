@@ -1,12 +1,12 @@
-from typing import Callable, List
-from fastapi import Depends, HTTPException, status
-from sqlmodel import Session
+from collections.abc import Callable
 
-from app.core.database import User, UserRole, get_session
+from fastapi import Depends, HTTPException, status
+
+from app.core.database import User, UserRole
 from app.core.security import get_current_user
 
 
-def require_roles(allowed_roles: List[UserRole]) -> Callable:
+def require_roles(allowed_roles: list[UserRole]) -> Callable:
     """Dependency factory for enforcing Role-Based Access Control (RBAC)."""
 
     def role_checker(current_user: User = Depends(get_current_user)) -> User:

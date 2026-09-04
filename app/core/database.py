@@ -1,9 +1,12 @@
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Optional
+
 from passlib.context import CryptContext
 from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
+
+from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -12,7 +15,7 @@ def safe_truncate_password(password: str) -> str:
     """Truncates string to maximum 72 bytes safely for Bcrypt."""
     if not password:
         return ""
-    if password.startswith("$2b$") or password.startswith("$2a$"):
+    if password.startswith(("$2b$", "$2a$")):
         return password
     pwd_bytes = password.encode("utf-8")[:72]
     return pwd_bytes.decode("utf-8", errors="ignore")
@@ -28,21 +31,21 @@ class DocumentRecord(SQLModel, table=True):
     __table_args__ = {"extend_existing": True}
     __allow_unmapped__ = True
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     filename: str
     document_type: str = "INVOICE"
     extraction_method: str = "AI_VISION"
     overall_status: str = "NEEDS_REVIEW"
-    vendor_name: Optional[str] = None
-    invoice_number: Optional[str] = None
-    total_amount: Optional[float] = 0.0
-    amount_paid: Optional[float] = 0.0
+    vendor_name: str | None = None
+    invoice_number: str | None = None
+    total_amount: float | None = 0.0
+    amount_paid: float | None = 0.0
     payment_status: str = "UNPAID"
-    audit_flags_json: Optional[str] = "[]"
-    raw_json_data: Optional[str] = None
-    auditor_notes: Optional[str] = None
-    client_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    audit_flags_json: str | None = "[]"
+    raw_json_data: str | None = None
+    auditor_notes: str | None = None
+    client_id: int | None = Field(default=None, foreign_key="user.id")
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
 
     owner: Optional["User"] = Relationship(
         back_populates="documents",
@@ -52,7 +55,7 @@ class DocumentRecord(SQLModel, table=True):
     )
 
     def __init__(self, **data):
-        if "filename" in data and data["filename"]:
+        if data.get("filename"):
             data["filename"] = self.sanitize_filename(data["filename"])
         super().__init__(**data)
 
@@ -70,13 +73,13 @@ class User(SQLModel, table=True):
     __table_args__ = {"extend_existing": True}
     __allow_unmapped__ = True
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     full_name: str
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 
-    documents: List[DocumentRecord] = Relationship(
+    documents: list[DocumentRecord] = Relationship(
         back_populates="owner",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
@@ -90,23 +93,20 @@ class User(SQLModel, table=True):
         truncated_pwd = safe_truncate_password(password)
         try:
             return pwd_context.verify(truncated_pwd, self.hashed_password)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     @staticmethod
     def hash_password(password: str) -> str:
         if not password:
             return ""
-        if password.startswith("$2b$") or password.startswith("$2a$"):
+        if password.startswith(("$2b$", "$2a$")):
             return password
         truncated_pwd = safe_truncate_password(password)
         return pwd_context.hash(truncated_pwd)
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./docusync.db")
-
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+DATABASE_URL = settings.SQLALCHEMY_DATABASE_URI
 
 engine = create_engine(
     DATABASE_URL,
@@ -126,12 +126,17 @@ def init_db():
     with Session(engine) as session:
         existing_user = session.exec(select(User)).first()
         if not existing_user:
-            default_username = os.getenv("INITIAL_CA_USERNAME", "ca_admin")
-            default_password = os.getenv("INITIAL_CA_PASSWORD", "Admin@123456")
+            default_username = settings.INITIAL_CA_USERNAME
+            default_password = settings.INITIAL_CA_PASSWORD
+            if not default_username or not default_password:
+                if not settings.DEBUG:
+                    return
+                default_username = settings.DEBUG_DEFAULT_CA_USERNAME
+                default_password = settings.DEBUG_DEFAULT_CA_PASSWORD
 
             initial_admin = User(
                 username=default_username,
-                full_name="Default CA Administrator",
+                full_name=settings.INITIAL_CA_FULL_NAME,
                 hashed_password=User.hash_password(default_password),
                 role=UserRole.CA_ADMIN,
             )

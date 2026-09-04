@@ -1,9 +1,8 @@
 import io
 import json
 import os
-import re
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pandas as pd
 import streamlit as st
@@ -15,6 +14,7 @@ from app.core.groq_client import get_ai_client
 from app.services.audit_engine import process_document_audit
 from app.services.extractor_service import extractor_service
 from app.services.gstin_validator import gstin_validator
+from app.services.rag_sql import build_safe_ledger_query
 from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
 
@@ -230,7 +230,7 @@ with tab_ingest:
                     overall_status="NEEDS_REVIEW",
                     raw_json_data=json.dumps(extraction_result),
                     audit_flags_json=json.dumps([]),
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
                 )
 
                 with Session(engine) as session:
@@ -245,7 +245,7 @@ with tab_ingest:
                 )
                 st.json(extraction_result)
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 st.error(f"Error processing document: {e}")
             finally:
                 if os.path.exists(tmp_path):
@@ -511,6 +511,7 @@ with tab_rag:
             1. Return ONLY raw executable SQL starting with SELECT inside standard text.
             2. Do NOT perform any INSERT, UPDATE, DELETE, or DROP operations.
             3. Do NOT include markdown code fences like ```sql.
+            4. Query only the documentrecord table. Do not use JOIN, PRAGMA, comments, or semicolons.
             
             User Request: {user_query}
             """
@@ -522,26 +523,14 @@ with tab_rag:
                     temperature=0.0,
                 )
                 generated_sql = sql_res.choices[0].message.content.strip()
-                generated_sql = re.sub(r"^```sql\s*|^```\s*|\s*```$", "", generated_sql, flags=re.MULTILINE).strip()
-
-                if not generated_sql.upper().startswith("SELECT"):
-                    raise ValueError("Security Violation: Generated statement is not a SELECT query.")
 
                 with Session(engine) as session:
-                    if not is_admin:
-                        if "WHERE" in generated_sql.upper():
-                            secure_sql = re.sub(
-                                r"(?i)WHERE",
-                                f"WHERE client_id = {user.id} AND (",
-                                generated_sql,
-                                count=1
-                            ) + ")"
-                        else:
-                            secure_sql = f"{generated_sql} WHERE client_id = {user.id}"
-                    else:
-                        secure_sql = generated_sql
-
-                    result_proxy = session.execute(text(secure_sql))
+                    secure_sql, query_params = build_safe_ledger_query(
+                        generated_sql,
+                        is_admin=is_admin,
+                        client_id=user.id,
+                    )
+                    result_proxy = session.execute(text(secure_sql), query_params)
                     query_results = [dict(row._mapping) for row in result_proxy]
 
                 synthesis_prompt = f"""
@@ -559,8 +548,8 @@ with tab_rag:
                 )
                 response_text = synth_res.choices[0].message.content
 
-            except Exception as e:
-                response_text = f"Unable to execute SQL query cleanly: {str(e)}"
+            except Exception as e:  # noqa: BLE001
+                response_text = f"Unable to execute SQL query cleanly: {e!s}"
 
         with st.chat_message("assistant"):
             st.markdown(response_text)
@@ -643,6 +632,6 @@ if is_admin:
                         }
                         for u in users_list
                     ]
-                    st.dataframe(pd.DataFrame(user_table_data), use_container_width=True)
+                    st.dataframe(pd.DataFrame(user_table_data), width="stretch")
                 else:
                     st.info("No users found.")

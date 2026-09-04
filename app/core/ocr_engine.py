@@ -1,4 +1,5 @@
 import io
+
 import pdfplumber
 import pytesseract
 
@@ -29,7 +30,7 @@ class OCREngine:
                     text = page.extract_text()
                     if text:
                         extracted_text += text + "\n"
-        except Exception:
+        except Exception:  # noqa: BLE001
             extracted_text = ""
 
         # Fallback to OCR if extracted text is below length threshold
@@ -48,7 +49,7 @@ class OCREngine:
                 for page in pdf.pages:
                     image = page.to_image(resolution=300).original
                     ocr_text += pytesseract.image_to_string(image) + "\n"
-        except Exception:
+        except Exception:  # noqa: BLE001
             return ocr_text
 
         return ocr_text

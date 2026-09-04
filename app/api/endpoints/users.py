@@ -1,4 +1,4 @@
-from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
@@ -28,9 +28,9 @@ class UserResponseSchema(BaseModel):
 
 
 class UserUpdateSchema(BaseModel):
-    full_name: Optional[str] = None
-    password: Optional[str] = None
-    role: Optional[UserRole] = None
+    full_name: str | None = None
+    password: str | None = None
+    role: UserRole | None = None
 
 
 # --- Endpoints ---
@@ -71,7 +71,7 @@ def create_user(
     return new_user
 
 
-@router.get("/", response_model=List[UserResponseSchema])
+@router.get("/", response_model=list[UserResponseSchema])
 def list_users(
     session: Session = Depends(get_session),
     admin: User = Depends(require_admin),
@@ -147,4 +147,3 @@ def delete_user(
 
     session.delete(user)
     session.commit()
-    return None

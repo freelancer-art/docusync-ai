@@ -1,5 +1,6 @@
 import json
 from typing import Any
+
 from sqlmodel import Session
 
 from app.core.database import DocumentRecord
@@ -44,13 +45,13 @@ class AuditEngine:
             )
             for flag in audit_result.flags:
                 flags.append(flag.model_dump())
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             flags.append(
                 {
                     "code": "VERIFICATION_SERVICE_ERROR",
                     "field": "verification_service",
                     "severity": "WARNING",
-                    "message": f"Verification service encountered an error: {str(e)}",
+                    "message": f"Verification service encountered an error: {e!s}",
                 }
             )
 
@@ -90,17 +91,12 @@ class AuditEngine:
         # 3. LLM Anomaly Inspection with Safe Exception Shield
         try:
             llm_result = verification_service.audit_with_llm_anomaly_check(raw_data)
-            if llm_result and hasattr(llm_result, "detected_anomalies") and llm_result.detected_anomalies:
-                for anomaly in llm_result.detected_anomalies:
-                    flags.append(
-                        {
-                            "code": "AI_ANOMALY_DETECTED",
-                            "field": getattr(anomaly, "field", "general"),
-                            "severity": getattr(anomaly, "severity", "HIGH"),
-                            "message": f"[AI Audit] {getattr(anomaly, 'description', '')}",
-                        }
-                    )
-        except Exception:
+            if llm_result and llm_result.detected_flags:
+                for flag in llm_result.detected_flags:
+                    flag_data = flag.model_dump()
+                    flag_data["message"] = f"[AI Audit] {flag_data['message']}"
+                    flags.append(flag_data)
+        except Exception:  # noqa: BLE001, S110
             pass  # Non-blocking fallthrough if LLM provider is unavailable
 
         # 4. Final Review Status Determination

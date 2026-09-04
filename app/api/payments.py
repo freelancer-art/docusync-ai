@@ -31,6 +31,12 @@ async def reconcile_payment(
         payment_amount=payload.payment_amount,
     )
 
+    if not result["success"] and result.get("error_code") == "INVALID_PAYMENT_AMOUNT":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=result["reason"]
+        )
+    if not result["success"] and result.get("error_code") == "DUPLICATE_INVOICE_NUMBER":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result["reason"])
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=result["reason"]

@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
+
 import redis
 from fastapi import FastAPI, Response, status
-from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlmodel import Session, select
 
@@ -23,21 +23,12 @@ async def lifespan(app: FastAPI):
     # Initialize database tables and seed initial users on boot
     try:
         init_db()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Warning: init_db failed on startup: {e}")
     yield
 
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
-
-# Allow CORS for Streamlit Cloud and local development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Register Middleware (Payload size limit registered early)
 app.add_middleware(PayloadSizeLimitMiddleware)
@@ -88,8 +79,7 @@ def readiness_probe(response: Response):
 
     # 2. Redis Broker Connectivity Check
     try:
-        redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
-        r = redis.Redis.from_url(redis_url, socket_timeout=2)
+        r = redis.Redis.from_url(settings.REDIS_URL, socket_timeout=2)
         if r.ping():
             checks["redis"] = "healthy"
         else:
@@ -108,4 +98,4 @@ def readiness_probe(response: Response):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True)

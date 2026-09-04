@@ -11,7 +11,7 @@ It automates file ingestion, document type classification, OCR fallback processi
 * **Multi-Document Auto-Routing:** Automatically classifies incoming uploads into supported document schemas (`TAX_INVOICE`, `BANK_STATEMENT`)[cite: 14].
 * **Hybrid OCR & Vision Engine:** Extracts digital PDF text via `pdfplumber` with automatic fallback to **Tesseract OCR** and `pypdfium2`-based Gemini/Groq vision parsing[cite: 13, 14].
 * **Deterministic Rule-Based Auditor:** Evaluates extracted metadata against Indian GSTIN regex rules, line-item mathematical sums, and tax balance logic to assign severity flags (`VERIFIED`, `NEEDS_REVIEW`, `REJECTED`)[cite: 13, 14].
-* **Payment Reconciliation:** Tracks `payment_status` (`UNPAID`, `PARTIAL`, `PAID`), `amount_paid`, and `due_date` directly within the schema and user portal[cite: 10, 14].
+* **Payment Reconciliation:** Tracks `payment_status` (`UNPAID`, `PARTIAL`, `PAID`) and `amount_paid` directly within the schema and user portal[cite: 10, 14].
 * **Multi-Tenant Database Persistence & RBAC:** Saves files, structured JSON, and audit summaries into SQLite via **SQLModel**, enforcing Role-Based Access Control (RBAC) separating `CA_ADMIN` and `CLIENT` access[cite: 10, 14].
 * **Thread-Safe Background Workers:** Decoupled asynchronous background tasks allow tests and execution workers to run cleanly over bound session engines without DB context mismatches.
 * **Security Hardened File Uploads & Exports:** 

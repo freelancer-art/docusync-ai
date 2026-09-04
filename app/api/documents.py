@@ -1,29 +1,26 @@
-import csv
-import io
-import json
-import xml.etree.ElementTree as ET
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.api.auth import get_current_user
 from app.core.database import DocumentRecord, User, UserRole, get_session
+from app.services.tally_exporter import tally_exporter
+from app.services.zoho_exporter import zoho_exporter
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
 class DocumentUpdateSchema(BaseModel):
-    vendor_name: Optional[str] = None
-    invoice_number: Optional[str] = None
-    total_amount: Optional[float] = None
-    overall_status: Optional[str] = None
-    auditor_notes: Optional[str] = None
+    vendor_name: str | None = None
+    invoice_number: str | None = None
+    total_amount: float | None = None
+    overall_status: str | None = None
+    auditor_notes: str | None = None
 
 
-@router.get("/", response_model=List[DocumentRecord])
+@router.get("/", response_model=list[DocumentRecord])
 def get_documents(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -59,29 +56,8 @@ def export_zoho_csv(
     query = select(DocumentRecord).where(DocumentRecord.overall_status == "VERIFIED")
     records = db.exec(query).all()
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "Invoice Number",
-        "Vendor Name",
-        "Document Type",
-        "Total Amount",
-        "Status",
-        "Created At",
-    ])
-
-    for doc in records:
-        writer.writerow([
-            doc.invoice_number or "",
-            doc.vendor_name or "",
-            doc.document_type,
-            doc.total_amount or 0.0,
-            doc.overall_status,
-            doc.created_at.isoformat() if doc.created_at else "",
-        ])
-
     return Response(
-        content=output.getvalue(),
+        content=zoho_exporter.generate_bills_csv(records),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=zoho_export.csv"},
     )
@@ -104,32 +80,8 @@ def export_tally_xml(
     query = select(DocumentRecord).where(DocumentRecord.overall_status == "VERIFIED")
     records = db.exec(query).all()
 
-    envelope = ET.Element("ENVELOPE")
-    header = ET.SubElement(envelope, "HEADER")
-    tally_req = ET.SubElement(header, "TALLYREQUEST")
-    tally_req.text = "Import Data"
-
-    body = ET.SubElement(envelope, "BODY")
-    import_data = ET.SubElement(body, "IMPORTDATA")
-    request_data = ET.SubElement(import_data, "REQUESTDATA")
-
-    for doc in records:
-        voucher = ET.SubElement(
-            request_data, "VOUCHER", VCHTYPE="Purchase", ACTION="Create"
-        )
-        party = ET.SubElement(voucher, "PARTYLEDGERNAME")
-        party.text = doc.vendor_name or "Unknown Vendor"
-
-        inv_num = ET.SubElement(voucher, "VOUCHERNUMBER")
-        inv_num.text = doc.invoice_number or ""
-
-        amount = ET.SubElement(voucher, "AMOUNT")
-        amount.text = str(doc.total_amount or 0.0)
-
-    xml_data = ET.tostring(envelope, encoding="utf-8", xml_declaration=True).decode("utf-8")
-
     return Response(
-        content=xml_data,
+        content=tally_exporter.generate_vouchers_xml(records),
         media_type="application/xml",
         headers={"Content-Disposition": "attachment; filename=tally_export.xml"},
     )
@@ -217,4 +169,3 @@ def delete_document(
 
     db.delete(record)
     db.commit()
-    return None

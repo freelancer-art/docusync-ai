@@ -1,10 +1,12 @@
 import json
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 from app.core.database import DocumentRecord, User, UserRole
+from app.services.rag_sql import build_safe_ledger_query
 
 
 @pytest.fixture(name="session")
@@ -94,3 +96,40 @@ def test_rag_chat_synthesis_mock(mock_get_ai_client):
     )
 
     assert "Total GST exposure is ₹180.00" in response.choices[0].message.content
+
+
+def test_rag_sql_rejects_unsafe_statements():
+    unsafe_statements = [
+        "DELETE FROM documentrecord",
+        "SELECT * FROM documentrecord; DROP TABLE user",
+        "SELECT * FROM documentrecord -- bypass",
+        "PRAGMA table_info(documentrecord)",
+        "SELECT * FROM documentrecord JOIN user ON user.id = documentrecord.client_id",
+    ]
+
+    for sql in unsafe_statements:
+        with pytest.raises(ValueError):
+            build_safe_ledger_query(sql, is_admin=True, client_id=None)
+
+
+def test_rag_sql_scopes_client_queries_with_bound_parameter():
+    sql, params = build_safe_ledger_query(
+        "SELECT id, client_id, total_amount FROM documentrecord WHERE overall_status = 'VERIFIED'",
+        is_admin=False,
+        client_id=42,
+    )
+
+    assert "client_id = :tenant_client_id" in sql
+    assert "overall_status = 'VERIFIED'" in sql
+    assert params == {"tenant_client_id": 42}
+
+
+def test_rag_sql_preserves_admin_query_without_params():
+    sql, params = build_safe_ledger_query(
+        "SELECT COUNT(*) AS total_documents FROM documentrecord",
+        is_admin=True,
+        client_id=None,
+    )
+
+    assert sql == "SELECT COUNT(*) AS total_documents FROM documentrecord"
+    assert params == {}

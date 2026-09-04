@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 
+from app.config import Settings, settings
 from app.core.database import User, get_session
 
 # Standard magic byte signatures
@@ -45,9 +46,19 @@ def validate_file_signature(content: bytes) -> str:
     )
 
 
-SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY", "docusync-dev-secret-key-change-in-prod-32bytes"
-)
+DEV_SECRET_KEY = "docusync-dev-secret-key-change-in-prod-32bytes"
+
+
+def resolve_secret_key(settings_obj: Settings = settings) -> str:
+    secret_key = os.getenv("JWT_SECRET_KEY") or settings_obj.SECRET_KEY
+    if secret_key:
+        return secret_key
+    if settings_obj.DEBUG:
+        return DEV_SECRET_KEY
+    raise RuntimeError("SECRET_KEY or JWT_SECRET_KEY must be set when DEBUG is false.")
+
+
+SECRET_KEY = resolve_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 hours
 

@@ -4,13 +4,14 @@ import os
 from sqlalchemy import create_engine
 from sqlmodel import Session
 
+from app.config import settings
 from app.core.celery_app import celery_app
 from app.core.database import DocumentRecord
 from app.core.database import engine as default_engine
 from app.services.audit_engine import process_document_audit
 from app.services.extractor_service import extract_structured_data
 
-UPLOAD_DIR = "storage/uploads"
+UPLOAD_DIR = settings.UPLOAD_DIR
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=10)

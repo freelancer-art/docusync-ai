@@ -2,6 +2,8 @@ import json
 from typing import Any
 from xml.sax.saxutils import escape
 
+from app.config import settings
+
 
 class TallyExporterService:
     @staticmethod
@@ -21,7 +23,9 @@ class TallyExporterService:
         total_amount = getattr(record, "total_amount", 0.0) or 0.0
 
         created_at = getattr(record, "created_at", None)
-        voucher_date = created_at.strftime("%Y%m%d") if created_at else "20260101"
+        voucher_date = (
+            created_at.strftime("%Y%m%d") if created_at else settings.TALLY_FALLBACK_DATE
+        )
 
         return f"""          <VOUCHER VCHTYPE="Purchase" ACTION="Create">
             <DATE>{voucher_date}</DATE>

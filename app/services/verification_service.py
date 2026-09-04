@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any
+
 from sqlmodel import Session, select
 
 from app.core.database import DocumentRecord
@@ -189,7 +189,7 @@ class VerificationService:
                 temperature=0.1,
             )
             return response
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
 

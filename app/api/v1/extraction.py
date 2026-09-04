@@ -1,37 +1,95 @@
 import os
+import uuid
+
 import aiofiles
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlmodel import Session
 
-from app.core.database import DocumentRecord, get_session
+from app.config import settings
+from app.core.database import DocumentRecord, User, UserRole, get_session
 from app.core.rate_limiter import rate_limiter
+from app.core.security import (
+    InvalidFileTypeError,
+    get_current_user,
+    validate_file_signature,
+)
 from app.services.extractor_service import extractor_service
 from app.worker import process_document_task
 
 router = APIRouter()
 
-UPLOAD_DIR = "storage/uploads"
+UPLOAD_DIR = settings.UPLOAD_DIR
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+ALLOWED_EXTENSIONS = {".pdf": "pdf", ".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg"}
 
-@router.post("/process-auto")
-async def process_document_auto(file: UploadFile = File(...)):
-    """
-    Synchronous processing endpoint: Auto-detects document type, runs extraction,
-    and returns immediate JSON results without database persistence.
-    """
-    if not file.filename or not file.filename.lower().endswith((".pdf", ".png", ".jpg", ".jpeg")):
+
+def _validated_upload_content(filename: str | None, content: bytes) -> str:
+    if not filename:
+        raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
+
+    _, ext = os.path.splitext(filename.lower())
+    expected_signature = ALLOWED_EXTENSIONS.get(ext)
+    if not expected_signature:
         raise HTTPException(
             status_code=400, detail="Only PDF and image files are supported."
         )
 
-    temp_path = os.path.join(UPLOAD_DIR, f"temp_{file.filename}")
     try:
-        content = await file.read()
+        actual_signature = validate_file_signature(content)
+    except InvalidFileTypeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if actual_signature != expected_signature:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file extension does not match file contents.",
+        )
+
+    return DocumentRecord.sanitize_filename(filename)
+
+
+def _resolve_target_client_id(
+    requested_client_id: int | None,
+    current_user: User,
+    db: Session,
+) -> int:
+    if current_user.id is None:
+        raise HTTPException(status_code=401, detail="Authenticated user is invalid.")
+
+    if current_user.role == UserRole.CA_ADMIN:
+        target_client_id = requested_client_id or current_user.id
+    else:
+        if requested_client_id is not None and requested_client_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Clients can only upload documents to their own account.",
+            )
+        target_client_id = current_user.id
+
+    if not db.get(User, target_client_id):
+        raise HTTPException(status_code=404, detail="Target client account not found.")
+
+    return target_client_id
+
+
+@router.post("/process-auto")
+async def process_document_auto(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Synchronous processing endpoint: Auto-detects document type, runs extraction,
+    and returns immediate JSON results without database persistence.
+    """
+    content = await file.read()
+    safe_filename = _validated_upload_content(file.filename, content)
+    temp_path = os.path.join(UPLOAD_DIR, f"temp_{uuid.uuid4().hex}_{safe_filename}")
+    try:
         async with aiofiles.open(temp_path, "wb") as buffer:
             await buffer.write(content)
 
-        result = extractor_service.process_document(temp_path, file.filename)
+        result = extractor_service.process_document(temp_path, safe_filename)
         return result
     except (OSError, ValueError) as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -47,30 +105,30 @@ async def process_document_auto(file: UploadFile = File(...)):
 )
 async def upload_document_async(
     file: UploadFile = File(...),
+    client_id: int | None = Query(None),
     db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Asynchronous ingestion endpoint: Persists file to storage, creates a DocumentRecord,
     and dispatches background task via Celery worker.
     """
-    if not file.filename or not file.filename.lower().endswith((".pdf", ".png", ".jpg", ".jpeg")):
-        raise HTTPException(
-            status_code=400, detail="Only PDF and image files are supported."
-        )
-
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    content = await file.read()
+    safe_filename = _validated_upload_content(file.filename, content)
+    target_client_id = _resolve_target_client_id(client_id, current_user, db)
+    file_path = os.path.join(UPLOAD_DIR, safe_filename)
     
     # Save file to upload directory
-    content = await file.read()
     async with aiofiles.open(file_path, "wb") as buffer:
         await buffer.write(content)
 
     # Initialize Database Record
     doc_record = DocumentRecord(
-        filename=file.filename,
+        filename=safe_filename,
         document_type="TAX_INVOICE",
         extraction_method="PENDING",
         overall_status="PROCESSING",
+        client_id=target_client_id,
     )
     db.add(doc_record)
     db.commit()

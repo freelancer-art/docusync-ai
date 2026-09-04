@@ -118,3 +118,48 @@ def test_tally_xml_export_flow(client: TestClient, session: Session):
     assert '<VOUCHER VCHTYPE="Purchase" ACTION="Create">' in xml_content
     assert "<PARTYLEDGERNAME>Acme Supplies</PARTYLEDGERNAME>" in xml_content
     assert "INV-TALLY-001" in xml_content
+
+
+def test_export_endpoints_use_service_format_and_escaping(
+    client: TestClient, session: Session
+):
+    user = User(
+        username="ca_export_security",
+        full_name="CA Export Security",
+        hashed_password=User.hash_password("admin123"),
+        role=UserRole.CA_ADMIN,
+    )
+    session.add(user)
+    session.commit()
+
+    login_resp = client.post(
+        "/api/auth/login",
+        data={"username": "ca_export_security", "password": "admin123"},
+    )
+    headers = {"Authorization": f"Bearer {login_resp.json()['access_token']}"}
+
+    doc = DocumentRecord(
+        filename="escaped_invoice.pdf",
+        document_type="INVOICE",
+        extraction_method="AI_VISION",
+        overall_status="VERIFIED",
+        client_id=user.id,
+        invoice_number="+SUM(1,2)",
+        vendor_name="=CMD|' /C calc'!A0",
+        total_amount=100.0,
+        raw_json_data='{"line_items": [{"description": "@danger", "quantity": 1, "unit_price": 100.0, "amount": 100.0}]}',
+        audit_flags_json="[]",
+    )
+    session.add(doc)
+    session.commit()
+
+    zoho_resp = client.get("/api/documents/export/zoho", headers=headers)
+    assert zoho_resp.status_code == 200
+    assert "Vendor Name,Vendor GSTIN,Bill Number" in zoho_resp.text
+    assert "'=CMD|' /C calc'!A0" in zoho_resp.text
+    assert "'+SUM(1,2)" in zoho_resp.text
+    assert "'@danger" in zoho_resp.text
+
+    tally_resp = client.get("/api/documents/export/tally", headers=headers)
+    assert tally_resp.status_code == 200
+    assert "<REPORTNAME>Vouchers</REPORTNAME>" in tally_resp.text

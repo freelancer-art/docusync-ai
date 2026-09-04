@@ -1,10 +1,12 @@
 import json
 from datetime import datetime, timezone
+
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 from app.core.database import DocumentRecord
+from app.schemas.verification import AIAnomalyResult, AuditFlag
 from app.services.audit_engine import AuditEngine, process_document_audit
 from app.services.gstin_validator import gstin_validator
 from app.services.tally_exporter import tally_exporter
@@ -199,3 +201,45 @@ def test_duplicate_billing_detection(session: Session):
     flags = json.loads(audited_doc.audit_flags_json)
     codes = [f["code"] for f in flags]
     assert "DUPLICATE_INVOICE" in codes
+
+
+def test_ai_anomaly_detected_flags_are_applied(monkeypatch):
+    monkeypatch.setattr(
+        verification_service,
+        "audit_with_llm_anomaly_check",
+        lambda invoice_data: AIAnomalyResult(
+            has_anomalies=True,
+            anomaly_summary="Suspicious tax pattern",
+            suggested_status="NEEDS_REVIEW",
+            detected_flags=[
+                AuditFlag(
+                    code="SUSPICIOUS_TAX_PATTERN",
+                    field="tax_amount",
+                    severity="HIGH",
+                    message="Tax amount requires review.",
+                )
+            ],
+        ),
+    )
+
+    doc = DocumentRecord(
+        filename="ai_anomaly.pdf",
+        vendor_name="Verified Vendor",
+        invoice_number="INV-AI-001",
+        total_amount=1180.0,
+        raw_json_data=json.dumps(
+            {
+                "vendor_name": "Verified Vendor",
+                "vendor_gstin": "27AAACT2727Q1ZW",
+                "invoice_number": "INV-AI-001",
+                "taxable_amount": 1000.0,
+                "tax_amount": 180.0,
+                "total_amount": 1180.0,
+            }
+        ),
+    )
+
+    result = AuditEngine.evaluate_document(doc)
+
+    assert result["status"] == "NEEDS_REVIEW"
+    assert any(f["code"] == "SUSPICIOUS_TAX_PATTERN" for f in result["flags"])

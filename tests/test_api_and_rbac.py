@@ -2,7 +2,8 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import Session, select
 
-from app.core.database import DocumentRecord, User, UserRole
+from app.api.v1 import extraction
+from app.core.database import DocumentRecord, User
 
 
 @pytest.mark.asyncio
@@ -179,3 +180,113 @@ async def test_admin_update_and_delete_user(
     # Verify user is removed from DB
     deleted_user = db_session.get(User, client_b.id)
     assert deleted_user is None
+
+
+@pytest.mark.asyncio
+async def test_upload_requires_authentication(async_client: AsyncClient):
+    response = await async_client.post(
+        "/api/v1/upload",
+        files={"file": ("invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_upload_validates_signature_and_sanitizes_filename(
+    async_client: AsyncClient,
+    db_session: Session,
+    seed_users: dict,
+    monkeypatch,
+    tmp_path,
+):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    monkeypatch.setattr(extraction, "UPLOAD_DIR", str(upload_dir))
+
+    delayed_doc_ids = []
+
+    def fake_delay(doc_id):
+        delayed_doc_ids.append(doc_id)
+
+    monkeypatch.setattr(extraction.process_document_task, "delay", fake_delay)
+
+    login_resp = await async_client.post(
+        "/api/auth/login",
+        data={"username": "client_a", "password": "pass123"},
+    )
+    headers = {"Authorization": f"Bearer {login_resp.json()['access_token']}"}
+
+    malicious_resp = await async_client.post(
+        "/api/v1/upload",
+        files={"file": ("invoice.pdf", b"MZ fake executable", "application/pdf")},
+        headers=headers,
+    )
+    assert malicious_resp.status_code == 400
+    assert "Unsupported file signature" in malicious_resp.json()["detail"]
+
+    upload_resp = await async_client.post(
+        "/api/v1/upload",
+        files={
+            "file": ("../../unsafe_invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")
+        },
+        headers=headers,
+    )
+    assert upload_resp.status_code == 202
+    assert upload_resp.json()["filename"] == "unsafe_invoice.pdf"
+
+    saved_path = upload_dir / "unsafe_invoice.pdf"
+    assert saved_path.exists()
+    assert delayed_doc_ids == [upload_resp.json()["document_id"]]
+
+    record = db_session.get(DocumentRecord, upload_resp.json()["document_id"])
+    assert record is not None
+    assert record.filename == "unsafe_invoice.pdf"
+    assert record.client_id == seed_users["client_a"].id
+
+
+@pytest.mark.asyncio
+async def test_process_auto_requires_auth_and_valid_signature(
+    async_client: AsyncClient,
+    seed_users: dict,
+    monkeypatch,
+    tmp_path,
+):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    monkeypatch.setattr(extraction, "UPLOAD_DIR", str(upload_dir))
+
+    unauth_resp = await async_client.post(
+        "/api/v1/process-auto",
+        files={"file": ("invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
+    )
+    assert unauth_resp.status_code == 401
+
+    login_resp = await async_client.post(
+        "/api/auth/login",
+        data={"username": "client_a", "password": "pass123"},
+    )
+    headers = {"Authorization": f"Bearer {login_resp.json()['access_token']}"}
+
+    bad_resp = await async_client.post(
+        "/api/v1/process-auto",
+        files={"file": ("invoice.pdf", b"MZ fake executable", "application/pdf")},
+        headers=headers,
+    )
+    assert bad_resp.status_code == 400
+
+    monkeypatch.setattr(
+        extraction.extractor_service,
+        "process_document",
+        lambda path, filename: {"filename": filename, "path_is_safe": str(upload_dir) in path},
+    )
+    good_resp = await async_client.post(
+        "/api/v1/process-auto",
+        files={
+            "file": ("../../invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")
+        },
+        headers=headers,
+    )
+    assert good_resp.status_code == 200
+    assert good_resp.json()["filename"] == "invoice.pdf"
+    assert good_resp.json()["path_is_safe"] is True
+    assert not list(upload_dir.iterdir())

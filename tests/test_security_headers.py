@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.middleware import setup_security_middleware
+from app.main import app
 
 mock_app = FastAPI()
 setup_security_middleware(mock_app, allowed_origins=["https://app.docusync.ai"])
@@ -50,3 +51,15 @@ def test_cors_disallowed_origin():
 
     # Disallowed origins should not return Access-Control-Allow-Origin header
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_real_app_does_not_allow_wildcard_cors_for_disallowed_origin():
+    client = TestClient(app)
+    headers = {
+        "Origin": "https://malicious-site.com",
+        "Access-Control-Request-Method": "GET",
+    }
+    response = client.options("/health", headers=headers)
+
+    assert response.status_code == 400
+    assert response.headers.get("access-control-allow-origin") != "*"

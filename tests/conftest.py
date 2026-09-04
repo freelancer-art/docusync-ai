@@ -1,5 +1,8 @@
 import os
 
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-docusync-32b")
+os.environ["DATABASE_URL"] = "sqlite:///./storage/test_docusync.db"
+
 import bcrypt
 import pytest
 import pytest_asyncio

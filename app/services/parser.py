@@ -1,13 +1,16 @@
-import os
-
 from google import genai
 from google.genai import types
 from pydantic import ValidationError
 
+from app.config import settings
 from app.schemas.document import ExtractedInvoiceData
 
-# Initialize Gemini client
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+def get_parser_client():
+    api_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
+    if not api_key:
+        return None
+    return genai.Client(api_key=api_key)
 
 
 def parse_document_data(file_bytes: bytes, mime_type: str) -> dict:
@@ -21,10 +24,13 @@ def parse_document_data(file_bytes: bytes, mime_type: str) -> dict:
     Accurately extract all totals, vendor GSTIN, invoice identifiers, and line item details.
     If a field is missing or unreadable, populate reasonable defaults or set strings to None.
     """
+    client = get_parser_client()
+    if client is None:
+        return ExtractedInvoiceData().model_dump()
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=settings.VISION_EXTRACTION_MODEL,
             contents=[
                 types.Part.from_bytes(
                     data=file_bytes,

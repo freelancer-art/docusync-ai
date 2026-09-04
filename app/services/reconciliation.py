@@ -12,13 +12,28 @@ class ReconciliationEngine:
     def process_payment(
         session: Session, invoice_number: str, payment_amount: float
     ) -> dict[str, Any]:
+        if payment_amount <= 0:
+            return {
+                "success": False,
+                "reason": "Payment amount must be greater than zero",
+                "error_code": "INVALID_PAYMENT_AMOUNT",
+            }
+
         statement = select(DocumentRecord).where(
             DocumentRecord.invoice_number == invoice_number
         )
-        doc = session.exec(statement).first()
+        matches = session.exec(statement).all()
 
-        if not doc:
+        if not matches:
             return {"success": False, "reason": "Invoice not found"}
+        if len(matches) > 1:
+            return {
+                "success": False,
+                "reason": "Multiple invoices found for invoice number",
+                "error_code": "DUPLICATE_INVOICE_NUMBER",
+            }
+
+        doc = matches[0]
 
         new_total_paid = doc.amount_paid + payment_amount
         total_due = doc.total_amount or 0.0
@@ -26,7 +41,7 @@ class ReconciliationEngine:
         if new_total_paid >= total_due:
             doc.payment_status = "PAID"
         elif new_total_paid > 0:
-            doc.payment_status = "PARTIALLY_PAID"
+            doc.payment_status = "PARTIAL"
 
         doc.amount_paid = new_total_paid
         session.add(doc)

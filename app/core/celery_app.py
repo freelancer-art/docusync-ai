@@ -1,10 +1,11 @@
-import os
 import ssl
+
 from celery import Celery
+
 from app.config import settings
 
-# Retrieve Redis URL from settings or environment
-raw_redis_url = getattr(settings, "REDIS_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+# Retrieve Redis URL from settings/environment
+raw_redis_url = settings.REDIS_URL
 
 # Automatically enforce TLS (rediss://) if connecting to Upstash
 if "upstash.io" in raw_redis_url and raw_redis_url.startswith("redis://"):

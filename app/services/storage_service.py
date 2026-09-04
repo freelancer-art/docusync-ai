@@ -1,34 +1,40 @@
-import io
 import logging
 import os
+
 from app.config import settings
 
 logger = logging.getLogger("docusync.storage")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-SUPABASE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "docusync-uploads")
-
-LOCAL_UPLOAD_DIR = "storage/uploads"
+LOCAL_UPLOAD_DIR = settings.UPLOAD_DIR
 os.makedirs(LOCAL_UPLOAD_DIR, exist_ok=True)
+
+
+def create_supabase_client(url: str, key: str):
+    from supabase import create_client
+
+    return create_client(url, key)
 
 
 class StorageService:
     def __init__(self):
-        self.use_supabase = bool(SUPABASE_URL and SUPABASE_KEY)
+        self.supabase_url = settings.SUPABASE_URL
+        self.supabase_key = settings.SUPABASE_KEY or settings.SUPABASE_SERVICE_ROLE_KEY
+        self.supabase_bucket = settings.SUPABASE_STORAGE_BUCKET
+        self.local_upload_dir = settings.UPLOAD_DIR
+        self.public_prefix = settings.STORAGE_PUBLIC_PREFIX.rstrip("/")
+        self.use_supabase = bool(self.supabase_url and self.supabase_key)
         self.client = None
 
         if self.use_supabase:
             try:
-                from supabase import create_client
-                self.client = create_client(SUPABASE_URL, SUPABASE_KEY)
+                self.client = create_supabase_client(self.supabase_url, self.supabase_key)
                 logger.info("StorageService configured using Supabase Cloud Storage.")
             except ImportError:
                 logger.warning(
                     "supabase package not installed. Defaulting to local file storage."
                 )
                 self.use_supabase = False
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"Failed to initialize Supabase client: {e}")
                 self.use_supabase = False
         else:
@@ -41,17 +47,17 @@ class StorageService:
         """
         if self.use_supabase and self.client:
             try:
-                res = self.client.storage.from_(SUPABASE_BUCKET).upload(
+                self.client.storage.from_(self.supabase_bucket).upload(
                     path=filename,
                     file=content,
                     file_options={"upsert": "true"}
                 )
                 return filename
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"Supabase upload failed for {filename}: {e}. Falling back to local storage.")
 
         # Local disk handling
-        local_path = os.path.join(LOCAL_UPLOAD_DIR, filename)
+        local_path = os.path.join(self.local_upload_dir, filename)
         with open(local_path, "wb") as f:
             f.write(content)
         return filename
@@ -62,13 +68,13 @@ class StorageService:
         """
         if self.use_supabase and self.client:
             try:
-                data = self.client.storage.from_(SUPABASE_BUCKET).download(filename)
+                data = self.client.storage.from_(self.supabase_bucket).download(filename)
                 return data
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"Supabase download failed for {filename}: {e}. Trying local disk.")
 
         # Local disk fallback
-        local_path = os.path.join(LOCAL_UPLOAD_DIR, filename)
+        local_path = os.path.join(self.local_upload_dir, filename)
         if os.path.exists(local_path):
             with open(local_path, "rb") as f:
                 return f.read()
@@ -81,12 +87,12 @@ class StorageService:
         """
         if self.use_supabase and self.client:
             try:
-                res = self.client.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
+                res = self.client.storage.from_(self.supabase_bucket).get_public_url(filename)
                 return res
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"Failed to get Supabase public URL for {filename}: {e}")
         
-        return f"/storage/uploads/{filename}"
+        return f"{self.public_prefix}/{filename}"
 
 
 storage_service = StorageService()

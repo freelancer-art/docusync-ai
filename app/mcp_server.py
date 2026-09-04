@@ -1,11 +1,42 @@
 import json
-from fastmcp import FastMCP
+
 from sqlmodel import Session, select
 
 from app.core.database import DocumentRecord, engine
 
+try:
+    import mcp.shared.exceptions as mcp_exceptions
+
+    if not hasattr(mcp_exceptions, "McpError") and hasattr(mcp_exceptions, "MCPError"):
+        mcp_exceptions.McpError = mcp_exceptions.MCPError
+
+    from fastmcp import FastMCP
+except ImportError:
+
+    class FastMCP:
+        def __init__(self, name: str):
+            self.name = name
+
+        def tool(self):
+            def decorator(func):
+                return func
+
+            return decorator
+
+        def run(self):
+            raise RuntimeError("FastMCP is not available in the current environment.")
+
 # Initialize FastMCP Server
 mcp = FastMCP("DocuSync-MCP-Server")
+
+
+def _safe_json_loads(value: str | None, fallback):
+    if not value:
+        return fallback
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return fallback
 
 
 @mcp.tool()
@@ -25,8 +56,8 @@ def get_document_by_id(doc_id: int) -> str:
                 "total_amount": doc.total_amount,
                 "overall_status": doc.overall_status,
                 "payment_status": doc.payment_status,
-                "created_at": doc.created_at.isoformat(),
-                "extracted_fields": json.loads(doc.raw_json_data),
+                "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                "extracted_fields": _safe_json_loads(doc.raw_json_data, {}),
             },
             indent=2,
         )
@@ -49,7 +80,7 @@ def list_flagged_documents() -> str:
                     "filename": doc.filename,
                     "vendor_name": doc.vendor_name,
                     "total_amount": doc.total_amount,
-                    "audit_flags": json.loads(doc.audit_flags_json),
+                    "audit_flags": _safe_json_loads(doc.audit_flags_json, []),
                 }
             )
 
