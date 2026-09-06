@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
@@ -26,7 +26,7 @@ def test_mcp_tools_return_document_metrics(monkeypatch):
                     amount_paid=0.0,
                     overall_status="VERIFIED",
                     payment_status="UNPAID",
-                    created_at=datetime(2026, 4, 1, tzinfo=UTC),
+                    created_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
                     raw_json_data='{"total_amount": 100.0, "cgst_amount": 9.0, "sgst_amount": 9.0}',
                     audit_flags_json="[]",
                 ),
@@ -38,7 +38,7 @@ def test_mcp_tools_return_document_metrics(monkeypatch):
                     amount_paid=250.0,
                     overall_status="NEEDS_REVIEW",
                     payment_status="PAID",
-                    created_at=datetime(2026, 5, 1, tzinfo=UTC),
+                    created_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
                     raw_json_data="{bad json",
                     audit_flags_json='[{"code": "MISSING_VENDOR_GSTIN", "severity": "WARNING"}]',
                 ),
@@ -88,7 +88,7 @@ def test_mcp_agent_tools_search_summarize_and_export(monkeypatch):
                     amount_paid=0.0,
                     overall_status="VERIFIED",
                     payment_status="UNPAID",
-                    created_at=datetime(2026, 4, 10, tzinfo=UTC),
+                    created_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
                     raw_json_data=json.dumps(
                         {
                             "vendor_gstin": "27AAACT2727Q1ZW",
@@ -108,7 +108,7 @@ def test_mcp_agent_tools_search_summarize_and_export(monkeypatch):
                     amount_paid=100.0,
                     overall_status="REJECTED",
                     payment_status="PARTIAL",
-                    created_at=datetime(2026, 4, 11, tzinfo=UTC),
+                    created_at=datetime(2026, 4, 11, tzinfo=timezone.utc),
                     raw_json_data=json.dumps({"igst_amount": 180.0}),
                     audit_flags_json=json.dumps(
                         [
@@ -128,7 +128,7 @@ def test_mcp_agent_tools_search_summarize_and_export(monkeypatch):
                     total_amount=500.0,
                     overall_status="VERIFIED",
                     payment_status="PAID",
-                    created_at=datetime(2026, 6, 1, tzinfo=UTC),
+                    created_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
                     raw_json_data=json.dumps({"igst_amount": 50.0}),
                 ),
             ]

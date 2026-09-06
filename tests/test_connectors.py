@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -70,7 +70,7 @@ def test_google_drive_listing_and_access_token_auth(monkeypatch):
         name="../invoice.pdf",
         mime_type="application/pdf",
         size=4,
-        modified_at=datetime(2026, 9, 6, 10, 0, tzinfo=UTC),
+        modified_at=datetime(2026, 9, 6, 10, 0, tzinfo=timezone.utc),
     )
 
     captured = {}
