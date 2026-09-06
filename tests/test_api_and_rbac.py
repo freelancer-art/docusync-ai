@@ -131,9 +131,7 @@ async def test_client_privilege_escalation_blocked(
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_profile(
-    async_client: AsyncClient, seed_users: dict
-):
+async def test_get_current_user_profile(async_client: AsyncClient, seed_users: dict):
     login_resp = await async_client.post(
         "/api/auth/login",
         data={"username": "client_a", "password": "pass123"},
@@ -172,9 +170,7 @@ async def test_admin_update_and_delete_user(
     assert patch_resp.json()["full_name"] == "Updated Client B Name"
 
     # Delete Client B account
-    del_resp = await async_client.delete(
-        f"/api/users/{client_b.id}", headers=headers
-    )
+    del_resp = await async_client.delete(f"/api/users/{client_b.id}", headers=headers)
     assert del_resp.status_code == 204
 
     # Verify user is removed from DB
@@ -227,7 +223,11 @@ async def test_upload_validates_signature_and_sanitizes_filename(
     upload_resp = await async_client.post(
         "/api/v1/upload",
         files={
-            "file": ("../../unsafe_invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")
+            "file": (
+                "../../unsafe_invoice.pdf",
+                b"%PDF-1.7\ncontent",
+                "application/pdf",
+            )
         },
         headers=headers,
     )
@@ -277,13 +277,14 @@ async def test_process_auto_requires_auth_and_valid_signature(
     monkeypatch.setattr(
         extraction.extractor_service,
         "process_document",
-        lambda path, filename: {"filename": filename, "path_is_safe": str(upload_dir) in path},
+        lambda path, filename: {
+            "filename": filename,
+            "path_is_safe": str(upload_dir) in path,
+        },
     )
     good_resp = await async_client.post(
         "/api/v1/process-auto",
-        files={
-            "file": ("../../invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")
-        },
+        files={"file": ("../../invoice.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
         headers=headers,
     )
     assert good_resp.status_code == 200

@@ -1,3 +1,5 @@
+"""Local and Supabase object-storage abstraction with signed URL support."""
+
 import logging
 import os
 
@@ -27,7 +29,9 @@ class StorageService:
 
         if self.use_supabase:
             try:
-                self.client = create_supabase_client(self.supabase_url, self.supabase_key)
+                self.client = create_supabase_client(
+                    self.supabase_url, self.supabase_key
+                )
                 logger.info("StorageService configured using Supabase Cloud Storage.")
             except ImportError:
                 logger.warning(
@@ -48,13 +52,13 @@ class StorageService:
         if self.use_supabase and self.client:
             try:
                 self.client.storage.from_(self.supabase_bucket).upload(
-                    path=filename,
-                    file=content,
-                    file_options={"upsert": "true"}
+                    path=filename, file=content, file_options={"upsert": "true"}
                 )
                 return filename
             except Exception as e:  # noqa: BLE001
-                logger.error(f"Supabase upload failed for {filename}: {e}. Falling back to local storage.")
+                logger.error(
+                    f"Supabase upload failed for {filename}: {e}. Falling back to local storage."
+                )
 
         # Local disk handling
         local_path = os.path.join(self.local_upload_dir, filename)
@@ -68,31 +72,54 @@ class StorageService:
         """
         if self.use_supabase and self.client:
             try:
-                data = self.client.storage.from_(self.supabase_bucket).download(filename)
+                data = self.client.storage.from_(self.supabase_bucket).download(
+                    filename
+                )
                 return data
             except Exception as e:  # noqa: BLE001
-                logger.error(f"Supabase download failed for {filename}: {e}. Trying local disk.")
+                logger.error(
+                    f"Supabase download failed for {filename}: {e}. Trying local disk."
+                )
 
         # Local disk fallback
         local_path = os.path.join(self.local_upload_dir, filename)
         if os.path.exists(local_path):
             with open(local_path, "rb") as f:
                 return f.read()
-        
+
         raise FileNotFoundError(f"File {filename} not found in cloud or local storage.")
 
-    def get_file_url(self, filename: str) -> str:
+    def get_file_url(
+        self, filename: str, *, signed: bool = False, expires_in: int = 3600
+    ) -> str:
         """
-        Generates public URL if hosted on Supabase Storage or local path fallback.
+        Generates a public or signed URL if hosted on Supabase Storage.
+
+        Local storage has no remote signing service, so it returns the configured
+        local path prefix as a fallback.
         """
         if self.use_supabase and self.client:
             try:
-                res = self.client.storage.from_(self.supabase_bucket).get_public_url(filename)
-                return res
+                bucket = self.client.storage.from_(self.supabase_bucket)
+                if signed:
+                    bounded_expiry = max(60, min(expires_in, 86400))
+                    result = bucket.create_signed_url(filename, bounded_expiry)
+                    if isinstance(result, dict):
+                        return (
+                            result.get("signedURL")
+                            or result.get("signed_url")
+                            or str(result)
+                        )
+                    return result
+                return bucket.get_public_url(filename)
             except Exception as e:  # noqa: BLE001
                 logger.error(f"Failed to get Supabase public URL for {filename}: {e}")
-        
+
         return f"{self.public_prefix}/{filename}"
+
+    def get_signed_file_url(self, filename: str, expires_in: int = 3600) -> str:
+        """Return a time-limited Supabase URL when cloud storage is enabled."""
+        return self.get_file_url(filename, signed=True, expires_in=expires_in)
 
 
 storage_service = StorageService()

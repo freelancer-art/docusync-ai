@@ -1,11 +1,23 @@
+"""FastMCP accounting tools with tenant-safe queries and audited mutations."""
+
+import hashlib
 import json
-from datetime import date, datetime
+import secrets
+from datetime import date, datetime, timedelta, timezone
+from functools import wraps
 from typing import Any
 
+from sqlalchemy import text
 from sqlmodel import Session, select
 
-from app.core.database import DocumentRecord, engine
+from app.core.database import (
+    DocumentRecord,
+    MCPConfirmationToken,
+    MCPToolInvocation,
+    engine,
+)
 from app.services.gstin_validator import gstin_validator
+from app.services.rag_sql import build_safe_ledger_query
 from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
 
@@ -31,6 +43,7 @@ except ImportError:
         def run(self):
             raise RuntimeError("FastMCP is not available in the current environment.")
 
+
 # Initialize FastMCP Server
 mcp = FastMCP("DocuSync-MCP-Server")
 
@@ -46,6 +59,167 @@ def _safe_json_loads(value: str | None, fallback):
 
 def _json_response(payload: Any) -> str:
     return json.dumps(payload, indent=2, default=str)
+
+
+def _audit_mcp_invocation(
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    actor: str,
+    error_message: str | None = None,
+) -> None:
+    try:
+        with Session(engine) as session:
+            session.add(
+                MCPToolInvocation(
+                    actor=actor,
+                    tool_name=tool_name,
+                    arguments_json=_json_response(arguments),
+                    outcome="error" if error_message else "success",
+                    error_message=error_message,
+                )
+            )
+            session.commit()
+    except Exception:  # noqa: BLE001
+        # Tool availability must not depend on audit storage availability.
+        return
+
+
+def _audit_argument_summary(arguments: dict[str, Any]) -> dict[str, Any]:
+    summary = {}
+    for key, value in arguments.items():
+        if key in {"confirmation_token", "password", "secret", "api_key"}:
+            summary[key] = "[REDACTED]"
+        elif isinstance(value, str) and len(value) > 500:
+            summary[key] = f"{value[:500]}..."
+        else:
+            summary[key] = value
+    return summary
+
+
+def _audited_tool(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        actor = str(kwargs.pop("actor", "anonymous"))
+        arguments = _audit_argument_summary({"args": args, **kwargs})
+        try:
+            result = func(*args, **kwargs)
+        except Exception as exc:
+            _audit_mcp_invocation(
+                func.__name__, arguments, actor=actor, error_message=str(exc)
+            )
+            raise
+        result_payload = _safe_json_loads(result, {}) if isinstance(result, str) else {}
+        _audit_mcp_invocation(
+            func.__name__,
+            arguments,
+            actor=actor,
+            error_message=result_payload.get("error")
+            if isinstance(result_payload, dict)
+            else None,
+        )
+        return result
+
+    return mcp.tool()(wrapper)
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@_audited_tool
+def request_mutation_confirmation(
+    action: str,
+    requested_by: str = "anonymous",
+    ttl_minutes: int = 10,
+) -> str:
+    """Issue a short-lived, single-use token for a named mutation action."""
+    if not action.strip():
+        return _json_response({"error": "action is required."})
+    ttl = max(1, min(ttl_minutes, 30))
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=ttl)
+    with Session(engine) as session:
+        session.add(
+            MCPConfirmationToken(
+                token_hash=_token_hash(token),
+                action=action.strip(),
+                requested_by=requested_by,
+                expires_at=expires_at,
+            )
+        )
+        session.commit()
+    return _json_response(
+        {
+            "confirmation_token": token,
+            "action": action.strip(),
+            "expires_at": expires_at.isoformat(),
+        }
+    )
+
+
+@_audited_tool
+def override_document_status(
+    doc_id: int,
+    new_status: str,
+    confirmation_token: str,
+    auditor_notes: str = "",
+) -> str:
+    """Override a document status only with a valid single-use confirmation token."""
+    allowed_statuses = {"VERIFIED", "NEEDS_REVIEW", "REJECTED"}
+    if new_status not in allowed_statuses:
+        return _json_response(
+            {"error": "new_status is not a supported document status."}
+        )
+
+    now = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        confirmation = session.exec(
+            select(MCPConfirmationToken).where(
+                MCPConfirmationToken.token_hash == _token_hash(confirmation_token),
+                MCPConfirmationToken.action == "override_document_status",
+                MCPConfirmationToken.consumed_at.is_(None),
+            )
+        ).first()
+        expires_at = confirmation.expires_at if confirmation else None
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if not confirmation or expires_at <= now:
+            return _json_response({"error": "A valid confirmation token is required."})
+
+        doc = session.get(DocumentRecord, doc_id)
+        if not doc:
+            return _json_response({"error": f"Document with ID {doc_id} not found."})
+
+        doc.overall_status = new_status
+        if auditor_notes:
+            doc.auditor_notes = auditor_notes
+        confirmation.consumed_at = now
+        session.add(doc)
+        session.add(confirmation)
+        session.commit()
+        return _json_response(
+            {"document_id": doc_id, "overall_status": new_status, "updated": True}
+        )
+
+
+@_audited_tool
+def run_ledger_query(
+    generated_sql: str,
+    is_admin: bool = False,
+    client_id: int | None = None,
+) -> str:
+    """Validate and execute an agent-generated, tenant-scoped ledger SELECT."""
+    try:
+        secure_sql, query_params = build_safe_ledger_query(
+            generated_sql, is_admin=is_admin, client_id=client_id
+        )
+        with Session(engine) as session:
+            result_proxy = session.execute(text(secure_sql), query_params)
+            results = [dict(row._mapping) for row in result_proxy]
+    except (TypeError, ValueError) as exc:
+        return _json_response({"error": str(exc)})
+    return _json_response({"results": results})
 
 
 def _bounded_limit(limit: int | None, default: int = 25, maximum: int = 100) -> int:
@@ -82,7 +256,9 @@ def _matches_period(
     return not (end_date and (created_date is None or created_date > end_date))
 
 
-def _base_record_payload(doc: DocumentRecord, include_raw: bool = False) -> dict[str, Any]:
+def _base_record_payload(
+    doc: DocumentRecord, include_raw: bool = False
+) -> dict[str, Any]:
     payload = {
         "id": doc.id,
         "client_id": doc.client_id,
@@ -132,15 +308,15 @@ def _filtered_records(
     records = session.exec(statement).all()
     records = [doc for doc in records if _matches_period(doc, start, end)]
     records.sort(
-        key=lambda doc: doc.created_at.timestamp()
-        if isinstance(doc.created_at, datetime)
-        else 0,
+        key=lambda doc: (
+            doc.created_at.timestamp() if isinstance(doc.created_at, datetime) else 0
+        ),
         reverse=True,
     )
     return records[: _bounded_limit(limit)]
 
 
-@mcp.tool()
+@_audited_tool
 def get_document_by_id(doc_id: int) -> str:
     """Fetch structured invoice details and metadata by Document ID."""
     with Session(engine) as session:
@@ -151,13 +327,13 @@ def get_document_by_id(doc_id: int) -> str:
         return _json_response(_base_record_payload(doc, include_raw=True))
 
 
-@mcp.tool()
+@_audited_tool
 def validate_gstin(gstin: str) -> str:
     """Validate GSTIN format, checksum, state code, and extracted PAN."""
     return _json_response(gstin_validator.verify_gstin(gstin))
 
 
-@mcp.tool()
+@_audited_tool
 def search_documents(
     client_id: int | None = None,
     overall_status: str | None = None,
@@ -188,7 +364,7 @@ def search_documents(
         return _json_response([_base_record_payload(doc) for doc in records])
 
 
-@mcp.tool()
+@_audited_tool
 def explain_audit_flags(doc_id: int) -> str:
     """Return an agent-friendly explanation of audit flags for one document."""
     with Session(engine) as session:
@@ -230,7 +406,7 @@ def explain_audit_flags(doc_id: int) -> str:
         )
 
 
-@mcp.tool()
+@_audited_tool
 def find_duplicate_invoices(client_id: int | None = None) -> str:
     """Find duplicate vendor and invoice-number combinations."""
     with Session(engine) as session:
@@ -256,14 +432,16 @@ def find_duplicate_invoices(client_id: int | None = None) -> str:
                 "vendor_name": vendor,
                 "invoice_number": invoice,
                 "record_ids": [doc.id for doc in docs],
-                "total_value_inr": round(sum(doc.total_amount or 0.0 for doc in docs), 2),
+                "total_value_inr": round(
+                    sum(doc.total_amount or 0.0 for doc in docs), 2
+                ),
             }
         )
 
     return _json_response(duplicates)
 
 
-@mcp.tool()
+@_audited_tool
 def summarize_client_tax_position(
     client_id: int | None = None,
     start_date: str | None = None,
@@ -289,7 +467,9 @@ def summarize_client_tax_position(
 
     for doc in records:
         status_counts[doc.overall_status] = status_counts.get(doc.overall_status, 0) + 1
-        payment_counts[doc.payment_status] = payment_counts.get(doc.payment_status, 0) + 1
+        payment_counts[doc.payment_status] = (
+            payment_counts.get(doc.payment_status, 0) + 1
+        )
         total_value += doc.total_amount or 0.0
 
         raw_data = _safe_json_loads(doc.raw_json_data, {})
@@ -312,7 +492,7 @@ def summarize_client_tax_position(
     )
 
 
-@mcp.tool()
+@_audited_tool
 def prepare_accounting_export(
     export_type: str,
     client_id: int | None = None,
@@ -323,7 +503,9 @@ def prepare_accounting_export(
     """Prepare Tally XML or Zoho CSV export payload metadata and preview."""
     normalized_type = export_type.strip().lower()
     if normalized_type not in {"tally", "zoho"}:
-        return _json_response({"error": "export_type must be either 'tally' or 'zoho'."})
+        return _json_response(
+            {"error": "export_type must be either 'tally' or 'zoho'."}
+        )
 
     with Session(engine) as session:
         try:
@@ -358,7 +540,7 @@ def prepare_accounting_export(
     )
 
 
-@mcp.tool()
+@_audited_tool
 def list_flagged_documents() -> str:
     """Retrieve all invoices that failed audit rules and require human review."""
     with Session(engine) as session:
@@ -382,7 +564,7 @@ def list_flagged_documents() -> str:
         return _json_response(results)
 
 
-@mcp.tool()
+@_audited_tool
 def get_financial_summary() -> str:
     """Calculate aggregate total invoice amounts split by payment and review status."""
     with Session(engine) as session:
@@ -394,9 +576,7 @@ def get_financial_summary() -> str:
             1 for doc in records if doc.overall_status == "NEEDS_REVIEW"
         )
         unpaid_value = sum(
-            doc.total_amount or 0.0
-            for doc in records
-            if doc.payment_status == "UNPAID"
+            doc.total_amount or 0.0 for doc in records if doc.payment_status == "UNPAID"
         )
 
         return _json_response(

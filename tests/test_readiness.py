@@ -8,7 +8,9 @@ def test_readiness_reports_redis_failure(monkeypatch):
         def ping(self):
             raise OSError("redis unavailable")
 
-    monkeypatch.setattr("app.main.redis.Redis.from_url", lambda *args, **kwargs: FailingRedis())
+    monkeypatch.setattr(
+        "app.main.redis.Redis.from_url", lambda *args, **kwargs: FailingRedis()
+    )
     client = TestClient(app)
 
     response = client.get("/ready")
@@ -24,7 +26,9 @@ def test_readiness_reports_all_healthy(monkeypatch):
         def ping(self):
             return True
 
-    monkeypatch.setattr("app.main.redis.Redis.from_url", lambda *args, **kwargs: HealthyRedis())
+    monkeypatch.setattr(
+        "app.main.redis.Redis.from_url", lambda *args, **kwargs: HealthyRedis()
+    )
     client = TestClient(app)
 
     response = client.get("/ready")

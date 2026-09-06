@@ -1,11 +1,11 @@
 import json
 from datetime import UTC, datetime
 
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app import mcp_server
-from app.core.database import DocumentRecord
+from app.core.database import DocumentRecord, MCPToolInvocation
 
 
 def test_mcp_tools_return_document_metrics(monkeypatch):
@@ -170,9 +170,14 @@ def test_mcp_agent_tools_search_summarize_and_export(monkeypatch):
 
     explanation = json.loads(mcp_server.explain_audit_flags(2))
     assert explanation["document_id"] == 2
-    assert explanation["recommended_action"] == "Review critical flags before export or reconciliation."
+    assert (
+        explanation["recommended_action"]
+        == "Review critical flags before export or reconciliation."
+    )
 
-    tally_export = json.loads(mcp_server.prepare_accounting_export("tally", client_id=1))
+    tally_export = json.loads(
+        mcp_server.prepare_accounting_export("tally", client_id=1)
+    )
     assert tally_export["content_type"] == "application/xml"
     assert tally_export["record_count"] == 2
     assert "<VOUCHER" in tally_export["preview"]
@@ -198,3 +203,81 @@ def test_mcp_tools_return_structured_errors_and_gstin_validation(monkeypatch):
     gstin_result = json.loads(mcp_server.validate_gstin("27AAACT2727Q1ZW"))
     assert gstin_result["valid"] is True
     assert gstin_result["state_name"] == "Maharashtra"
+
+
+def test_mcp_audit_confirmation_and_tenant_scoped_query(monkeypatch):
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(mcp_server, "engine", engine)
+
+    with Session(engine) as session:
+        session.add_all(
+            [
+                DocumentRecord(
+                    client_id=7,
+                    filename="client-seven.pdf",
+                    total_amount=700.0,
+                    overall_status="NEEDS_REVIEW",
+                ),
+                DocumentRecord(
+                    client_id=8,
+                    filename="client-eight.pdf",
+                    total_amount=800.0,
+                    overall_status="NEEDS_REVIEW",
+                ),
+            ]
+        )
+        session.commit()
+
+    search = json.loads(mcp_server.search_documents(client_id=7, actor="client-7"))
+    assert [record["client_id"] for record in search] == [7]
+
+    query = json.loads(
+        mcp_server.run_ledger_query(
+            "SELECT SUM(total_amount) AS total FROM documentrecord",
+            is_admin=False,
+            client_id=7,
+        )
+    )
+    assert query["results"] == [{"total": 700.0}]
+    assert "error" in json.loads(
+        mcp_server.run_ledger_query(
+            "UPDATE documentrecord SET total_amount = 0",
+            is_admin=False,
+            client_id=7,
+        )
+    )
+
+    token_payload = json.loads(
+        mcp_server.request_mutation_confirmation(
+            "override_document_status", requested_by="ca-admin"
+        )
+    )
+    updated = json.loads(
+        mcp_server.override_document_status(
+            1,
+            "VERIFIED",
+            token_payload["confirmation_token"],
+            auditor_notes="Reviewed by CA",
+        )
+    )
+    assert updated["updated"] is True
+    reused = json.loads(
+        mcp_server.override_document_status(
+            1,
+            "REJECTED",
+            token_payload["confirmation_token"],
+        )
+    )
+    assert "error" in reused
+
+    with Session(engine) as session:
+        invocations = session.exec(select(MCPToolInvocation)).all()
+    assert any(
+        invocation.tool_name == "search_documents"
+        and invocation.actor == "client-7"
+        and invocation.outcome == "success"
+        for invocation in invocations
+    )

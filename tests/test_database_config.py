@@ -31,12 +31,16 @@ def test_init_db_seeds_explicit_admin_when_credentials_are_configured(monkeypatc
     monkeypatch.setattr(database, "engine", engine)
     monkeypatch.setattr(database.settings, "DEBUG", False)
     monkeypatch.setattr(database.settings, "INITIAL_CA_USERNAME", "configured_admin")
-    monkeypatch.setattr(database.settings, "INITIAL_CA_PASSWORD", "ConfiguredPassword123!")
+    monkeypatch.setattr(
+        database.settings, "INITIAL_CA_PASSWORD", "ConfiguredPassword123!"
+    )
 
     database.init_db()
 
     with Session(engine) as session:
-        user = session.exec(select(User).where(User.username == "configured_admin")).one()
+        user = session.exec(
+            select(User).where(User.username == "configured_admin")
+        ).one()
         assert user.verify_password("ConfiguredPassword123!")
 
     SQLModel.metadata.drop_all(engine)

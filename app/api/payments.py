@@ -1,3 +1,5 @@
+"""Payment reconciliation endpoint for tenant-owned invoice records."""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -36,7 +38,9 @@ async def reconcile_payment(
             status_code=status.HTTP_400_BAD_REQUEST, detail=result["reason"]
         )
     if not result["success"] and result.get("error_code") == "DUPLICATE_INVOICE_NUMBER":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result["reason"])
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=result["reason"]
+        )
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=result["reason"]

@@ -1,3 +1,5 @@
+"""Business-rule verification for tax arithmetic, GST structure, and duplicates."""
+
 import json
 import re
 
@@ -14,7 +16,9 @@ GSTIN_REGEX = r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
 class VerificationService:
     @staticmethod
     def audit_tax_invoice(
-        invoice_data: dict, session: Session | None = None, current_doc_id: int | None = None
+        invoice_data: dict,
+        session: Session | None = None,
+        current_doc_id: int | None = None,
     ) -> DocumentAuditResult:
         flags: list[AuditFlag] = []
 
@@ -51,7 +55,9 @@ class VerificationService:
                 )
 
         # 2. Buyer GSTIN Format Validation
-        buyer_gstin = (invoice_data.get("buyer_gstin") or invoice_data.get("customer_gstin") or "").strip()
+        buyer_gstin = (
+            invoice_data.get("buyer_gstin") or invoice_data.get("customer_gstin") or ""
+        ).strip()
         if buyer_gstin and not re.match(GSTIN_REGEX, buyer_gstin):
             flags.append(
                 AuditFlag(
@@ -80,13 +86,24 @@ class VerificationService:
                 )
 
         # 4. Tax Structure Alignment (Intra-state CGST+SGST vs Inter-state IGST)
-        if vendor_gstin and buyer_gstin and len(vendor_gstin) >= 2 and len(buyer_gstin) >= 2:
+        if (
+            vendor_gstin
+            and buyer_gstin
+            and len(vendor_gstin) >= 2
+            and len(buyer_gstin) >= 2
+        ):
             vendor_state = vendor_gstin[:2]
             buyer_state = buyer_gstin[:2]
 
-            cgst = float(invoice_data.get("cgst") or invoice_data.get("cgst_amount") or 0.0)
-            sgst = float(invoice_data.get("sgst") or invoice_data.get("sgst_amount") or 0.0)
-            igst = float(invoice_data.get("igst") or invoice_data.get("igst_amount") or 0.0)
+            cgst = float(
+                invoice_data.get("cgst") or invoice_data.get("cgst_amount") or 0.0
+            )
+            sgst = float(
+                invoice_data.get("sgst") or invoice_data.get("sgst_amount") or 0.0
+            )
+            igst = float(
+                invoice_data.get("igst") or invoice_data.get("igst_amount") or 0.0
+            )
 
             if vendor_state == buyer_state:
                 if igst > 0 and (cgst == 0 and sgst == 0):
@@ -117,7 +134,11 @@ class VerificationService:
                 for item in line_items
                 if isinstance(item, dict)
             )
-            if taxable_amount > 0 and abs(calculated_line_sum - taxable_amount) > 1.0 and abs(calculated_line_sum - total_amount) > 1.0:
+            if (
+                taxable_amount > 0
+                and abs(calculated_line_sum - taxable_amount) > 1.0
+                and abs(calculated_line_sum - total_amount) > 1.0
+            ):
                 flags.append(
                     AuditFlag(
                         code="LINE_ITEM_SUM_MISMATCH",
@@ -131,7 +152,12 @@ class VerificationService:
         vendor_name = (invoice_data.get("vendor_name") or "").strip()
         invoice_number = (invoice_data.get("invoice_number") or "").strip()
 
-        if session and vendor_name and invoice_number and invoice_number not in ["INV-PENDING", "0", ""]:
+        if (
+            session
+            and vendor_name
+            and invoice_number
+            and invoice_number not in ["INV-PENDING", "0", ""]
+        ):
             query = select(DocumentRecord).where(
                 DocumentRecord.vendor_name == vendor_name,
                 DocumentRecord.invoice_number == invoice_number,

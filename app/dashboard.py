@@ -1,3 +1,5 @@
+"""Streamlit CA and client dashboard for the DocuSync document workflow."""
+
 import io
 import json
 import os
@@ -6,15 +8,14 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.core.database import DocumentRecord, User, UserRole, engine, init_db
 from app.core.groq_client import get_ai_client
+from app.mcp_server import run_ledger_query
 from app.services.audit_engine import process_document_audit
 from app.services.extractor_service import extractor_service
 from app.services.gstin_validator import gstin_validator
-from app.services.rag_sql import build_safe_ledger_query
 from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
 
@@ -85,7 +86,9 @@ if not st.session_state.authenticated:
                             select(User).where(User.username == new_username)
                         ).first()
                         if existing_user:
-                            st.error(f"Username '{new_username}' is already registered.")
+                            st.error(
+                                f"Username '{new_username}' is already registered."
+                            )
                         else:
                             ca_user = User(
                                 username=new_username,
@@ -95,7 +98,9 @@ if not st.session_state.authenticated:
                             )
                             session.add(ca_user)
                             session.commit()
-                            st.success("CA Account created successfully! Please sign in.")
+                            st.success(
+                                "CA Account created successfully! Please sign in."
+                            )
 
         elif auth_mode == "Register Client":
             st.subheader("Client Registration")
@@ -112,7 +117,9 @@ if not st.session_state.authenticated:
                             select(User).where(User.username == client_username)
                         ).first()
                         if existing_user:
-                            st.error(f"Username '{client_username}' is already registered.")
+                            st.error(
+                                f"Username '{client_username}' is already registered."
+                            )
                         else:
                             client_user = User(
                                 username=client_username,
@@ -122,7 +129,9 @@ if not st.session_state.authenticated:
                             )
                             session.add(client_user)
                             session.commit()
-                            st.success("Client Account created successfully! Please sign in.")
+                            st.success(
+                                "Client Account created successfully! Please sign in."
+                            )
 
     st.stop()
 
@@ -166,7 +175,12 @@ st.title(
     f"📄 DocuSync AI: {'CA Master Ledger' if is_admin else 'Client Document Portal'}"
 )
 
-tab_titles = ["📤 Upload & Extract", "📋 Audit Ledger", "💬 Ask DocuSync AI", "📊 Analytics"]
+tab_titles = [
+    "📤 Upload & Extract",
+    "📋 Audit Ledger",
+    "💬 Ask DocuSync AI",
+    "📊 Analytics",
+]
 if is_admin:
     tab_titles.append("👥 Manage Accounts")
 
@@ -192,7 +206,9 @@ with tab_ingest:
             )
             target_client_id = client_options[selected_client_name]
         else:
-            st.warning("No client accounts found. Please onboard client accounts in the 'Manage Accounts' tab.")
+            st.warning(
+                "No client accounts found. Please onboard client accounts in the 'Manage Accounts' tab."
+            )
             target_client_id = None
     else:
         target_client_id = user.id
@@ -202,9 +218,9 @@ with tab_ingest:
         "Choose a Tax Invoice or Bank Statement PDF", type=["pdf"]
     )
 
-    if (
-        uploaded_file is not None and target_client_id is not None
-    ) and st.button("Process & Save", type="primary"):
+    if (uploaded_file is not None and target_client_id is not None) and st.button(
+        "Process & Save", type="primary"
+    ):
         with st.spinner("Processing, extracting & auditing document..."):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
@@ -445,7 +461,9 @@ with tab_audit:
                                 "Auditor Notes", value=rec.auditor_notes or ""
                             )
 
-                            save_btn = st.form_submit_button("Save Audit Decision", type="primary")
+                            save_btn = st.form_submit_button(
+                                "Save Audit Decision", type="primary"
+                            )
 
                         if save_btn:
                             db_rec = session.get(DocumentRecord, rec.id)
@@ -468,13 +486,17 @@ with tab_audit:
 # ---------------------------------------------------------
 with tab_rag:
     st.header("💬 Ask DocuSync AI")
-    st.caption("Execute SQL analytics across your tenant ledger using natural language.")
+    st.caption(
+        "Execute SQL analytics across your tenant ledger using natural language."
+    )
 
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_query = st.chat_input("e.g. What is the total invoice amount for all REJECTED documents?")
+    user_query = st.chat_input(
+        "e.g. What is the total invoice amount for all REJECTED documents?"
+    )
 
     if user_query:
         st.session_state.chat_messages.append({"role": "user", "content": user_query})
@@ -524,19 +546,21 @@ with tab_rag:
                 )
                 generated_sql = sql_res.choices[0].message.content.strip()
 
-                with Session(engine) as session:
-                    secure_sql, query_params = build_safe_ledger_query(
+                query_payload = json.loads(
+                    run_ledger_query(
                         generated_sql,
                         is_admin=is_admin,
                         client_id=user.id,
+                        actor=str(user.id),
                     )
-                    result_proxy = session.execute(text(secure_sql), query_params)
-                    query_results = [dict(row._mapping) for row in result_proxy]
+                )
+                if "error" in query_payload:
+                    raise ValueError(query_payload["error"])
+                query_results = query_payload["results"]
 
                 synthesis_prompt = f"""
                 Synthesize a clear, concise accounting answer based on the SQL Query and Database Results below.
                 
-                Executed SQL: {secure_sql}
                 Database Output: {json.dumps(query_results, default=str)}
                 User Request: {user_query}
                 """
@@ -554,7 +578,9 @@ with tab_rag:
         with st.chat_message("assistant"):
             st.markdown(response_text)
 
-        st.session_state.chat_messages.append({"role": "assistant", "content": response_text})
+        st.session_state.chat_messages.append(
+            {"role": "assistant", "content": response_text}
+        )
 
 # ---------------------------------------------------------
 # TAB 4: ANALYTICS
@@ -583,7 +609,9 @@ if is_admin:
     tab_users = tabs[4]
     with tab_users:
         st.header("👥 Account Management")
-        st.caption("Onboard new Client accounts or manage existing users in the system.")
+        st.caption(
+            "Onboard new Client accounts or manage existing users in the system."
+        )
 
         col_onboard, col_list = st.columns([1, 1])
 
@@ -594,10 +622,16 @@ if is_admin:
                 client_fullname = st.text_input("Client / Company Name")
                 client_password = st.text_input("Temporary Password", type="password")
 
-                onboard_submitted = st.form_submit_button("Create Client Account", type="primary")
+                onboard_submitted = st.form_submit_button(
+                    "Create Client Account", type="primary"
+                )
 
                 if onboard_submitted:
-                    if not client_username or not client_fullname or not client_password:
+                    if (
+                        not client_username
+                        or not client_fullname
+                        or not client_password
+                    ):
                         st.error("All fields are required.")
                     else:
                         with Session(engine) as session:
@@ -605,7 +639,9 @@ if is_admin:
                                 select(User).where(User.username == client_username)
                             ).first()
                             if existing:
-                                st.error(f"Username '{client_username}' already exists.")
+                                st.error(
+                                    f"Username '{client_username}' already exists."
+                                )
                             else:
                                 new_client = User(
                                     username=client_username,
@@ -615,7 +651,9 @@ if is_admin:
                                 )
                                 session.add(new_client)
                                 session.commit()
-                                st.success(f"Successfully onboarded Client: '{client_fullname}'!")
+                                st.success(
+                                    f"Successfully onboarded Client: '{client_fullname}'!"
+                                )
                                 st.rerun()
 
         with col_list:

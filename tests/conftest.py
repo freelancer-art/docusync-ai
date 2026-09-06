@@ -22,9 +22,7 @@ if not hasattr(bcrypt, "__about__"):
     bcrypt.__about__ = About()
 
 TEST_DATABASE_URL = "sqlite:///./storage/test_docusync.db"
-engine = create_engine(
-    TEST_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -105,9 +103,7 @@ async def async_client(db_session: Session):
     app.dependency_overrides[get_session] = get_session_override
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
     app.dependency_overrides.clear()

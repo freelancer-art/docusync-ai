@@ -1,3 +1,5 @@
+"""Environment-backed application configuration and safe local defaults."""
+
 from typing import Any
 
 from pydantic import field_validator
@@ -5,8 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Environment-backed application configuration and safe local defaults."""
+
     APP_NAME: str = "DocuSync AI"
     DEBUG: bool = True
+    LOG_LEVEL: str = "INFO"
     ALLOWED_ORIGINS: list[str] = [
         "https://app.docusync.ai",
         "http://localhost:8501",

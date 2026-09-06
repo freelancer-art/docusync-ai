@@ -1,3 +1,4 @@
+import json
 import logging
 
 from fastapi import FastAPI
@@ -50,6 +51,7 @@ def test_structured_log_formatter():
     )
     formatted = formatter.format(record)
 
-    assert "'message': 'Test log message'" in formatted
-    assert "'level': 'INFO'" in formatted
-    assert "'correlation_id':" in formatted
+    payload = json.loads(formatted)
+    assert payload["message"] == "Test log message"
+    assert payload["level"] == "INFO"
+    assert payload["correlation_id"] == ""

@@ -1,3 +1,5 @@
+"""Celery task that extracts, audits, and persists one uploaded document."""
+
 import json
 import os
 

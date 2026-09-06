@@ -61,7 +61,11 @@ def test_rag_context_scoping_client_vs_admin(session: Session):
     session.commit()
 
     # Query scoping for Client 1
-    c1_records = session.query(DocumentRecord).filter(DocumentRecord.client_id == client1.id).all()
+    c1_records = (
+        session.query(DocumentRecord)
+        .filter(DocumentRecord.client_id == client1.id)
+        .all()
+    )
     assert len(c1_records) == 1
     assert c1_records[0].vendor_name == "Vendor A"
 
@@ -75,14 +79,19 @@ def test_rag_chat_synthesis_mock(mock_get_ai_client):
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(content="Total GST exposure is ₹180.00 across 1 document."))
+        MagicMock(
+            message=MagicMock(
+                content="Total GST exposure is ₹180.00 across 1 document."
+            )
+        )
     ]
     mock_client.chat.completions.create.return_value = mock_response
     mock_get_ai_client.return_value = (mock_client, "llama-3.3-70b-versatile")
 
     from app.core.groq_client import get_ai_client
+
     client, model = get_ai_client()
-    
+
     context = [{"id": 1, "vendor": "Test Corp", "total_amount": 1180.0}]
     user_query = "What is the total GST exposure?"
 

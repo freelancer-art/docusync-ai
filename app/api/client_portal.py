@@ -1,3 +1,5 @@
+"""Tenant-scoped client portal endpoints for review and document decisions."""
+
 import json
 from typing import Any
 

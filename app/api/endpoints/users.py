@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
@@ -42,7 +41,9 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/", response_model=UserResponseSchema, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=UserResponseSchema, status_code=status.HTTP_201_CREATED
+)
 def create_user(
     user_in: UserCreateSchema,
     session: Session = Depends(get_session),

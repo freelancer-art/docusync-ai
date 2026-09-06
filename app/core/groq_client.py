@@ -1,3 +1,5 @@
+"""Optional Groq and Gemini client factories used by extraction workflows."""
+
 import logging
 
 import instructor
@@ -26,7 +28,9 @@ def get_groq_client() -> Instructor | None:
 
 def get_gemini_client() -> Instructor | None:
     """Instantiates an instructor-wrapped Google GenAI client if GEMINI_API_KEY is configured."""
-    api_key = getattr(settings, "GEMINI_API_KEY", None) or getattr(settings, "GOOGLE_API_KEY", None)
+    api_key = getattr(settings, "GEMINI_API_KEY", None) or getattr(
+        settings, "GOOGLE_API_KEY", None
+    )
     if not api_key:
         logger.warning("GEMINI_API_KEY / GOOGLE_API_KEY not set in settings.")
         return None

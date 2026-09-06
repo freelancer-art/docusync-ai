@@ -23,7 +23,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def setup_security_middleware(app: FastAPI, allowed_origins: list[str] | None = None) -> None:
+def setup_security_middleware(
+    app: FastAPI, allowed_origins: list[str] | None = None
+) -> None:
     """
     Attach CORS and custom security headers middleware to the FastAPI application.
     """

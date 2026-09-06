@@ -42,6 +42,11 @@ def test_storage_service_supabase_success(monkeypatch):
         def get_public_url(self, filename):
             return f"https://storage.example/{filename}"
 
+        def create_signed_url(self, filename, expires_in):
+            return {
+                "signedURL": f"https://storage.example/{filename}?expires={expires_in}"
+            }
+
     class FakeStorage:
         def from_(self, bucket):
             assert bucket == "configured-bucket"
@@ -50,17 +55,32 @@ def test_storage_service_supabase_success(monkeypatch):
     class FakeClient:
         storage = FakeStorage()
 
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_URL", "https://supabase.example")
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_KEY", "service-key")
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_SERVICE_ROLE_KEY", None)
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_STORAGE_BUCKET", "configured-bucket")
-    monkeypatch.setattr("app.services.storage_service.create_supabase_client", lambda url, key: FakeClient())
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_URL", "https://supabase.example"
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_KEY", "service-key"
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_SERVICE_ROLE_KEY", None
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_STORAGE_BUCKET",
+        "configured-bucket",
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.create_supabase_client",
+        lambda url, key: FakeClient(),
+    )
 
     service = StorageService()
 
     assert service.save_file("invoice.pdf", b"pdf") == "invoice.pdf"
     assert service.get_file_bytes("invoice.pdf") == b"cloud:invoice.pdf"
     assert service.get_file_url("invoice.pdf") == "https://storage.example/invoice.pdf"
+    assert service.get_signed_file_url("invoice.pdf", expires_in=120) == (
+        "https://storage.example/invoice.pdf?expires=120"
+    )
 
 
 def test_storage_service_supabase_download_falls_back_to_local(tmp_path, monkeypatch):
@@ -79,12 +99,26 @@ def test_storage_service_supabase_download_falls_back_to_local(tmp_path, monkeyp
     upload_dir.mkdir()
     (upload_dir / "invoice.pdf").write_bytes(b"local copy")
 
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_URL", "https://supabase.example")
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_KEY", "service-key")
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_SERVICE_ROLE_KEY", None)
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_STORAGE_BUCKET", "configured-bucket")
-    monkeypatch.setattr("app.services.storage_service.settings.UPLOAD_DIR", str(upload_dir))
-    monkeypatch.setattr("app.services.storage_service.create_supabase_client", lambda url, key: FakeClient())
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_URL", "https://supabase.example"
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_KEY", "service-key"
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_SERVICE_ROLE_KEY", None
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.SUPABASE_STORAGE_BUCKET",
+        "configured-bucket",
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.settings.UPLOAD_DIR", str(upload_dir)
+    )
+    monkeypatch.setattr(
+        "app.services.storage_service.create_supabase_client",
+        lambda url, key: FakeClient(),
+    )
 
     service = StorageService()
 

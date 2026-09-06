@@ -1,9 +1,12 @@
+"""SQLModel entities, engine setup, authentication records, and tenant metadata."""
+
 import os
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
 from passlib.context import CryptContext
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
 
 from app.config import settings
@@ -26,6 +29,67 @@ class UserRole(str, Enum):
     CLIENT = "CLIENT"
 
 
+class MCPToolInvocation(SQLModel, table=True):
+    __tablename__ = "mcptoolinvocation"
+    __table_args__ = {"extend_existing": True}
+
+    id: int | None = Field(default=None, primary_key=True)
+    actor: str = "anonymous"
+    tool_name: str
+    arguments_json: str = "{}"
+    outcome: str
+    error_message: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MCPConfirmationToken(SQLModel, table=True):
+    __tablename__ = "mcpconfirmationtoken"
+    __table_args__ = {"extend_existing": True}
+
+    id: int | None = Field(default=None, primary_key=True)
+    token_hash: str = Field(index=True, unique=True)
+    action: str
+    requested_by: str = "anonymous"
+    expires_at: datetime
+    consumed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ConnectorBinding(SQLModel, table=True):
+    __tablename__ = "connectorbinding"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", "external_account_id"),
+        {"extend_existing": True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="user.id", index=True)
+    provider: str = Field(index=True)
+    external_account_id: str
+    credential_ref: str | None = None
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ImportedFile(SQLModel, table=True):
+    __tablename__ = "importedfile"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", "source_file_id"),
+        UniqueConstraint("tenant_id", "provider", "content_hash"),
+        {"extend_existing": True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="user.id", index=True)
+    provider: str = Field(index=True)
+    source_file_id: str
+    content_hash: str = Field(index=True)
+    original_filename: str
+    storage_key: str
+    document_id: int | None = Field(default=None, foreign_key="documentrecord.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class DocumentRecord(SQLModel, table=True):
     __tablename__ = "documentrecord"
     __table_args__ = {"extend_existing": True}
@@ -45,7 +109,9 @@ class DocumentRecord(SQLModel, table=True):
     raw_json_data: str | None = None
     auditor_notes: str | None = None
     client_id: int | None = Field(default=None, foreign_key="user.id")
-    created_at: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     owner: Optional["User"] = Relationship(
         back_populates="documents",

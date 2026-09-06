@@ -1,3 +1,5 @@
+"""CSV-safe Zoho Books bill export generation."""
+
 import json
 from typing import Any
 

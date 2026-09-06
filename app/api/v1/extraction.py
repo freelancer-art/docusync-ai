@@ -1,3 +1,5 @@
+"""Versioned upload and automatic document extraction endpoints."""
+
 import os
 import uuid
 
@@ -26,7 +28,9 @@ ALLOWED_EXTENSIONS = {".pdf": "pdf", ".png": "png", ".jpg": "jpeg", ".jpeg": "jp
 
 def _validated_upload_content(filename: str | None, content: bytes) -> str:
     if not filename:
-        raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must have a filename."
+        )
 
     _, ext = os.path.splitext(filename.lower())
     expected_signature = ALLOWED_EXTENSIONS.get(ext)
@@ -117,7 +121,7 @@ async def upload_document_async(
     safe_filename = _validated_upload_content(file.filename, content)
     target_client_id = _resolve_target_client_id(client_id, current_user, db)
     file_path = os.path.join(UPLOAD_DIR, safe_filename)
-    
+
     # Save file to upload directory
     async with aiofiles.open(file_path, "wb") as buffer:
         await buffer.write(content)

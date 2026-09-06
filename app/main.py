@@ -1,3 +1,6 @@
+"""FastAPI application entrypoint, lifecycle hooks, middleware, and health probes."""
+
+import logging
 from contextlib import asynccontextmanager
 
 import redis
@@ -14,17 +17,21 @@ from app.api.v1.extraction import router as extraction_router
 from app.config import settings
 from app.core.database import engine, init_db
 from app.core.input_validation import PayloadSizeLimitMiddleware
-from app.core.logging import CorrelationIDMiddleware
+from app.core.logging import CorrelationIDMiddleware, configure_logging
 from app.core.middleware import setup_security_middleware
+
+configure_logging(settings.LOG_LEVEL)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Initialize application resources before serving requests."""
     # Initialize database tables and seed initial users on boot
     try:
         init_db()
-    except Exception as e:  # noqa: BLE001
-        print(f"Warning: init_db failed on startup: {e}")
+    except Exception:
+        logger.exception("Database initialization failed on startup")
     yield
 
 
@@ -48,6 +55,7 @@ app.include_router(users_router)
 
 @app.get("/")
 def read_root():
+    """Return a minimal service identity response."""
     return {"status": "online", "app": settings.APP_NAME}
 
 
@@ -59,6 +67,7 @@ def liveness_probe():
 
 @app.get("/health")
 async def health_check():
+    """Return a lightweight health response without dependency checks."""
     return {"status": "ok"}
 
 
@@ -98,4 +107,6 @@ def readiness_probe(response: Response):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True)
+    uvicorn.run(
+        "app.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True
+    )

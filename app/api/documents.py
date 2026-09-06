@@ -1,9 +1,12 @@
+"""Authenticated document listing, audit, storage URL, and export endpoints."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.api.auth import get_current_user
 from app.core.database import DocumentRecord, User, UserRole, get_session
+from app.services.storage_service import storage_service
 from app.services.tally_exporter import tally_exporter
 from app.services.zoho_exporter import zoho_exporter
 
@@ -87,6 +90,31 @@ def export_tally_xml(
     )
 
 
+@router.get("/{document_id}/file-url")
+def get_document_file_url(
+    document_id: int,
+    expires_in: int = Query(3600, ge=60, le=86400),
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a tenant-authorized signed Supabase URL or local fallback path."""
+    record = db.get(DocumentRecord, document_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+    if current_user.role != UserRole.CA_ADMIN and record.client_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this document",
+        )
+    return {
+        "document_id": record.id,
+        "url": storage_service.get_signed_file_url(record.filename, expires_in),
+        "expires_in": expires_in,
+    }
+
+
 @router.get("/{document_id}", response_model=DocumentRecord)
 def get_document_by_id(
     document_id: int,
@@ -102,10 +130,7 @@ def get_document_by_id(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
 
-    if (
-        current_user.role != UserRole.CA_ADMIN
-        and record.client_id != current_user.id
-    ):
+    if current_user.role != UserRole.CA_ADMIN and record.client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this document",

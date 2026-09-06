@@ -9,21 +9,22 @@
 - **Core Infrastructure & UI:** Completed ✅
 - **Phase 3: AI Vision Extraction Engine:** Completed ✅[cite: 13]
 - **Phase 4: AI Anomaly Engine & RAG Chat Assistant:** Completed ✅
-- **Phase 5: MCP Accounting Agent Tooling:** In Progress 🚧
-- **Phase 1: Persistence & Supabase Storage:** Deferred ⏸️
+- **Phase 5: MCP Accounting Agent Tooling:** Core complete ✅
+- **Phase 1: Persistence & Supabase Storage:** Supabase-ready ✅
 - **Phase 2: Multi-Tenant User Management:** Completed ✅
 
 ---
 
 ## Code Review Findings & Impacted Areas
 
-Review date: 2026-09-04
+Review date: 2026-09-06
 
 Test baseline:
 
 - `pytest` is not available directly on the shell path.
-- `uv run pytest` now passes after configuration hardening and remaining coverage work: **91 passed, 3 warnings**.
-- `uv run ruff check app tests` passes.
+- `uv run --extra dev pytest` passes after connector, storage, diagnostics, and documentation coverage work: **98 passed, 3 warnings**.
+- `uv run --extra dev ruff check app tests` passes.
+- `uv run --extra dev ruff format --check app tests` passes.
 - `git diff --check` passes.
 
 ### High Priority
@@ -148,7 +149,7 @@ Test baseline:
 
 ---
 
-## 🚧 Phase 5: MCP Accounting Agent Tooling (In Progress)
+## ✅ Phase 5: MCP Accounting Agent Tooling
 
 **Goal:** Expose DocuSync accounting workflows as safe, structured tools that AI agents can call without raw database access.
 
@@ -163,22 +164,26 @@ Test baseline:
   * [x] `find_duplicate_invoices(client_id)` to identify duplicate vendor/invoice combinations.
   * [x] `summarize_client_tax_position(...)` for totals, status counts, and estimated GST credit.
   * [x] `prepare_accounting_export(...)` for Tally XML and Zoho CSV export previews.
-* [ ] **Guarded Mutation Tools**
-  * [ ] Add explicit confirmation-token flow before mutating tools such as reconciliation, status override, export persistence, or account creation.
-  * [ ] Add audit logging for every MCP tool invocation, including actor, tool name, arguments summary, and outcome.
-* [ ] **Replace Streamlit Raw SQL RAG Path**
-  * [ ] Route assistant answers through the MCP-style tool layer instead of direct LLM-generated SQL execution.
-  * [ ] Add tool-call orchestration tests for common accounting questions.
-* [ ] **External MCP/Connector Intake**
-  * [ ] Design Google Drive/Dropbox/Gmail document intake tools.
-  * [ ] Define connector-safe tenant mapping and deduplication behavior before importing external files.
+* [x] **Guarded Mutation Tools**
+  * [x] Add explicit confirmation-token flow before mutating tools such as status override.
+  * [x] Add audit logging for every MCP tool invocation, including actor, tool name, redacted arguments summary, and outcome.
+* [x] **Replace Streamlit Raw SQL RAG Path**
+  * [x] Route assistant answers through the MCP-style tool layer instead of direct database execution.
+  * [x] Add tool-call orchestration tests for tenant-scoped accounting questions.
+* [x] **External MCP/Connector Intake**
+  * [x] Define a provider-neutral connector interface for Google Drive, Dropbox, and Gmail adapters.
+  * [x] Implement Google Drive listing/download with service-account and access-token authentication constructors.
+  * [x] Add deterministic Dropbox and Gmail mock adapters for development and tests.
+  * [x] Enforce connector binding to the requested tenant and deduplicate by provider source ID and content hash.
+  * [x] Add isolated ingestion, authentication, tenant-boundary, and duplicate-file tests.
+  * [ ] Implement Dropbox and Gmail provider adapters.
 
 ---
 
-## ⏸️ Phase 1: Persistence & Storage Migration (Deferred)
+## ✅ Phase 1: Persistence & Storage Migration
 
-* [ ] Migrate from local disk (`storage/uploads/`) to Supabase Bucket (`docusync-documents`)[cite: 10, 13].
-* [ ] Generate time-limited signed URLs for secure PDF view/download in UI.
+* [x] Add Supabase Storage mode with local disk (`storage/uploads/`) fallback.
+* [x] Generate bounded, time-limited signed URLs through `GET /api/documents/{id}/file-url`.
 * [x] Supabase storage mode and local fallback behavior are centralized in `StorageService` and covered by tests.
 
 ---
@@ -194,3 +199,15 @@ Test baseline:
 
 * [x] Remove compiled `__pycache__` directories and temporary script dumps[cite: 13].
 * [x] Verify directory tree structure and dependencies (`pyproject.toml`, `uv.lock`)[cite: 13].
+
+## 🔍 Quality, Debugging & Documentation Review
+
+* [x] Add configurable structured JSON logging with correlation IDs and replace startup `print()` diagnostics.
+* [x] Add module-level purpose docstrings and public API docstrings to the runtime surfaces most likely to be extended or operated.
+* [x] Document local setup, roles, uploads, extraction, audit review, payments, exports, MCP tools, connectors, storage, troubleshooting, and deployment in `USER_MANUAL.md`.
+* [x] Add tests and lint checks to the documented development workflow.
+* [x] Link the complete user manual from the primary project documentation.
+* [x] Add a reusable development workflow checklist and pull-request template so the review criteria are repeated for every implementation.
+* [x] Align pre-commit with the project Ruff version and add whitespace validation.
+* [ ] Continue incremental docstring coverage for legacy internal helpers when those modules are next changed.
+* [ ] Add production observability integration (central log sink, metrics, and alerting) before launch.

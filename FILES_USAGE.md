@@ -2,6 +2,15 @@
 
 This document outlines the responsibility and integration role of every file in the **DocuSync AI** repository[cite: 14].
 
+* **`USER_MANUAL.md`**
+  Complete user and operator guide covering installation, configuration, roles, dashboard workflows, REST API usage, connectors, storage, MCP, troubleshooting, security, and development practices.
+
+* **`DEVELOPMENT_WORKFLOW.md`**
+  Definition-of-done checklist for implementation planning, tests, tenant/security review, structured diagnostics, documentation, quality gates, and production readiness.
+
+* **`.github/pull_request_template.md`**
+  Review checklist that makes validation, documentation, security, dependency, and known-gap checks explicit for every pull request.
+
 ---
 
 ### Core Application (`app/`)
@@ -13,14 +22,14 @@ This document outlines the responsibility and integration role of every file in 
   Streamlit web interface for CAs and clients. Features file upload widgets, multi-tenant document ledgers, status filters, payment reconciliation controls, and instant export download triggers[cite: 14].
 
 * **`app/config.py`**[cite: 14]
-  Pydantic `BaseSettings` manager. Loads environment variables from `.env` or system environment (API keys, DB connection strings, JWT secret keys) with safe fallbacks for CI runner environments[cite: 14].
+  Pydantic `BaseSettings` manager. Loads environment variables from `.env` or system environment (API keys, DB connection strings, JWT secret keys, log level, and optional Supabase storage settings) with safe fallbacks for CI runner environments[cite: 14].
 
 ---
 
 ### API Layer (`app/api/`)
 
 * **`app/api/documents.py`**[cite: 14]
-  Document management and upload controller. Handles magic-byte file signature verification, path traversal sanitization, SQLModel record creation, thread-safe background processing dispatch, RBAC controls, and accounting export endpoints (`/export/zoho`, `/export/tally`)[cite: 10, 14].
+  Document management and upload controller. Handles magic-byte file signature verification, path traversal sanitization, SQLModel record creation, thread-safe background processing dispatch, RBAC controls, accounting export endpoints (`/export/zoho`, `/export/tally`), and tenant-authorized signed file URLs (`/{document_id}/file-url`)[cite: 10, 14].
 
 * **`app/api/v1/extraction.py`**[cite: 14]
   Extraction router exposing direct processing endpoints (`POST /api/v1/process-auto`) for raw document text extraction, classification, and auditing[cite: 14].
@@ -33,10 +42,13 @@ This document outlines the responsibility and integration role of every file in 
 ### Core Infrastructure (`app/core/`)
 
 * **`app/core/database.py`**[cite: 14]
-  Database layer setup. Defines SQLModel entities (`User`, `DocumentRecord`), database engine connections, default seed users, and field sanitization validators[cite: 10, 14].
+  Database layer setup. Defines SQLModel entities (`User`, `DocumentRecord`, connector bindings, imported-file identities, MCP audit records), database engine connections, default seed users, and field sanitization validators[cite: 10, 14].
 
 * **`app/core/security.py`**[cite: 14]
   Security validation engine. Enforces strict magic-byte file signature validation (PDF, PNG, JPEG) and password hashing/verification via `bcrypt`[cite: 10, 14].
+
+* **`app/core/logging.py`**
+  Configures valid JSON logs and request correlation IDs for API diagnostics.
 
 * **`app/core/ocr_engine.py`**[cite: 14]
   Document text extraction engine using `pdfplumber` for digital PDFs with fallback to `pytesseract` and `poppler` for scanned images[cite: 14].
@@ -67,6 +79,15 @@ This document outlines the responsibility and integration role of every file in 
 
 ### Services & Business Logic (`app/services/`)
 
+* **`app/connectors/base.py`**
+  Provider-neutral `DocumentConnector` protocol and normalized `ConnectorFile` metadata used by Google Drive, Dropbox, and Gmail adapters.
+
+* **`app/connectors/google_drive.py`**
+  First connector implementation. Lists and downloads Google Drive files using read-only service-account or access-token credentials.
+
+* **`app/connectors/mock.py`**
+  Deterministic Dropbox and Gmail mock adapters for local development and tests. They implement the shared connector contract without external credentials.
+
 * **`app/services/audit_engine.py`**
   Background worker service responsible for triggering document validation rules and saving updated flags and status to the database[cite: 10].
 
@@ -88,6 +109,12 @@ This document outlines the responsibility and integration role of every file in 
 * **`app/services/parser.py`**[cite: 14]
   Utility functions for cleaning and parsing raw extracted document text[cite: 14].
 
+* **`app/services/connector_ingestion.py`**
+  Tenant-bound external file ingestion service. Validates an enabled connector binding, downloads files, stores them through `StorageService`, creates document records, and deduplicates by source ID and SHA-256 content hash.
+
+* **`app/services/storage_service.py`**
+  Local/Supabase storage abstraction with byte retrieval, public URLs, and bounded signed Supabase URLs.
+
 ---
 
 ### Test Suite & Utilities (`tests/`, root)
@@ -106,6 +133,9 @@ This document outlines the responsibility and integration role of every file in 
 
 * **`tests/test_security_hardening.py`**[cite: 14]
   Resilience tests for path traversal stripping, magic byte validation, formula injection escaping, and malformed inputs[cite: 10, 14].
+
+* **`tests/test_connectors.py`**
+  Tests Google Drive metadata/authentication construction, tenant binding enforcement, source/content deduplication, and imported document ownership.
 
 * **`tests/test_auth_and_exports.py`** & **`tests/test_client_portal.py`**
   Tests verifying export stream formats (Zoho CSV/Tally XML) and portal filtering logic.

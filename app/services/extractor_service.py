@@ -1,3 +1,5 @@
+"""OCR, PDF rendering, classification, and structured AI extraction pipeline."""
+
 import base64
 import io
 import json
@@ -14,35 +16,63 @@ logger = logging.getLogger("docusync.extractor")
 
 
 class LineItem(BaseModel):
-    description: str | None = Field(default=None, description="Description of product or service")
+    description: str | None = Field(
+        default=None, description="Description of product or service"
+    )
     hsn_sac: str | None = Field(default=None, description="HSN or SAC code")
     quantity: float | None = Field(default=0.0, description="Quantity")
     unit_price: float | None = Field(default=0.0, description="Price per unit")
-    taxable_amount: float | None = Field(default=0.0, description="Taxable amount before GST")
-    gst_rate: float | None = Field(default=0.0, description="GST Rate Percentage (e.g. 18.0)")
-    total_amount: float | None = Field(default=0.0, description="Line item total including taxes")
+    taxable_amount: float | None = Field(
+        default=0.0, description="Taxable amount before GST"
+    )
+    gst_rate: float | None = Field(
+        default=0.0, description="GST Rate Percentage (e.g. 18.0)"
+    )
+    total_amount: float | None = Field(
+        default=0.0, description="Line item total including taxes"
+    )
 
 
 class TaxInvoiceSchema(BaseModel):
-    vendor_name: str | None = Field(default=None, description="Legal Name of the Vendor/Supplier")
-    vendor_gstin: str | None = Field(default=None, description="15-digit GSTIN of the Vendor")
-    customer_name: str | None = Field(default=None, description="Legal Name of the Recipient/Client")
-    customer_gstin: str | None = Field(default=None, description="15-digit GSTIN of the Recipient")
-    invoice_number: str | None = Field(default=None, description="Invoice or Bill Reference Number")
-    invoice_date: str | None = Field(default=None, description="Date of Invoice issuance (YYYY-MM-DD)")
+    vendor_name: str | None = Field(
+        default=None, description="Legal Name of the Vendor/Supplier"
+    )
+    vendor_gstin: str | None = Field(
+        default=None, description="15-digit GSTIN of the Vendor"
+    )
+    customer_name: str | None = Field(
+        default=None, description="Legal Name of the Recipient/Client"
+    )
+    customer_gstin: str | None = Field(
+        default=None, description="15-digit GSTIN of the Recipient"
+    )
+    invoice_number: str | None = Field(
+        default=None, description="Invoice or Bill Reference Number"
+    )
+    invoice_date: str | None = Field(
+        default=None, description="Date of Invoice issuance (YYYY-MM-DD)"
+    )
     taxable_amount: float | None = Field(default=0.0, description="Total Taxable Value")
     cgst_amount: float | None = Field(default=0.0, description="Central GST Amount")
     sgst_amount: float | None = Field(default=0.0, description="State GST Amount")
     igst_amount: float | None = Field(default=0.0, description="Integrated GST Amount")
-    tax_amount: float | None = Field(default=0.0, description="Total Combined Tax Amount (CGST+SGST or IGST)")
-    total_amount: float | None = Field(default=0.0, description="Grand Total Invoice Amount")
-    line_items: list[LineItem] = Field(default_factory=list, description="Itemized invoice rows")
+    tax_amount: float | None = Field(
+        default=0.0, description="Total Combined Tax Amount (CGST+SGST or IGST)"
+    )
+    total_amount: float | None = Field(
+        default=0.0, description="Grand Total Invoice Amount"
+    )
+    line_items: list[LineItem] = Field(
+        default_factory=list, description="Itemized invoice rows"
+    )
 
 
 class BankStatementSchema(BaseModel):
     bank_name: str | None = Field(default=None, description="Name of the Bank")
     account_number: str | None = Field(default=None, description="Bank Account Number")
-    statement_period: str | None = Field(default=None, description="Date Range of Statement")
+    statement_period: str | None = Field(
+        default=None, description="Date Range of Statement"
+    )
     opening_balance: float | None = Field(default=0.0, description="Opening Balance")
     closing_balance: float | None = Field(default=0.0, description="Closing Balance")
 
@@ -78,7 +108,9 @@ def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str, 
     else:
         file_bytes = file_input
 
-    stream_or_bytes = io.BytesIO(file_bytes) if isinstance(file_bytes, bytes) else file_bytes
+    stream_or_bytes = (
+        io.BytesIO(file_bytes) if isinstance(file_bytes, bytes) else file_bytes
+    )
 
     if hasattr(ocr_engine, "extract_text"):
         try:
@@ -90,7 +122,11 @@ def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str, 
             logger.error(f"OCR engine extraction error: {e}")
 
     try:
-        return file_bytes.decode("utf-8", errors="ignore"), "raw_bytes_fallback", file_bytes
+        return (
+            file_bytes.decode("utf-8", errors="ignore"),
+            "raw_bytes_fallback",
+            file_bytes,
+        )
     except Exception:  # noqa: BLE001
         return "", "FAILED", file_bytes
 
@@ -111,7 +147,9 @@ def classify_document_text(text: str) -> str:
     return "TAX_INVOICE"
 
 
-def _calculate_confidence_score(extracted_dict: dict[str, Any], extraction_method: str) -> float:
+def _calculate_confidence_score(
+    extracted_dict: dict[str, Any], extraction_method: str
+) -> float:
     """Calculates overall extraction confidence score (0.0 to 1.0)."""
     score = 1.0
     if "ocr" in extraction_method.lower():
@@ -126,7 +164,9 @@ def _calculate_confidence_score(extracted_dict: dict[str, Any], extraction_metho
             missing_keys += 1
 
     field_completeness = 1.0 - (missing_keys / total_keys)
-    final_score = round(max(0.0, min(1.0, (score * 0.4) + (field_completeness * 0.6))), 2)
+    final_score = round(
+        max(0.0, min(1.0, (score * 0.4) + (field_completeness * 0.6))), 2
+    )
     return final_score
 
 
@@ -141,17 +181,21 @@ def extract_structured_data(
         doc_type = classify_document_text(raw_text)
 
     base64_images = convert_pdf_to_images_base64(file_bytes) if file_bytes else []
-    
+
     client, model_name = get_ai_client()
 
     if not client:
         fallback = _generate_fallback_extraction(doc_type, filename, raw_text)
-        fallback["confidence_score"] = _calculate_confidence_score(fallback, extraction_method)
+        fallback["confidence_score"] = _calculate_confidence_score(
+            fallback, extraction_method
+        )
         fallback["extraction_method"] = extraction_method
         fallback["doc_type"] = doc_type
         return fallback
 
-    target_schema = TaxInvoiceSchema if doc_type == "TAX_INVOICE" else BankStatementSchema
+    target_schema = (
+        TaxInvoiceSchema if doc_type == "TAX_INVOICE" else BankStatementSchema
+    )
 
     messages = [
         {
@@ -166,9 +210,16 @@ def extract_structured_data(
 
     user_content = []
     if raw_text and raw_text.strip():
-        user_content.append({"type": "text", "text": f"Extracted Document Text:\n{raw_text[:4000]}"})
+        user_content.append(
+            {"type": "text", "text": f"Extracted Document Text:\n{raw_text[:4000]}"}
+        )
     else:
-        user_content.append({"type": "text", "text": f"Analyze attached document image for filename: {filename}"})
+        user_content.append(
+            {
+                "type": "text",
+                "text": f"Analyze attached document image for filename: {filename}",
+            }
+        )
 
     for b64_img in base64_images:
         user_content.append(
@@ -193,24 +244,30 @@ def extract_structured_data(
             cgst = float(data.get("cgst_amount") or 0.0)
             sgst = float(data.get("sgst_amount") or 0.0)
             igst = float(data.get("igst_amount") or 0.0)
-            
+
             if not data.get("tax_amount") or data.get("tax_amount") == 0.0:
                 data["tax_amount"] = round(cgst + sgst + igst, 2)
-            
+
             # Key fixes for verification alignment
             data["buyer_gstin"] = data.get("customer_gstin")
             data["cgst"] = cgst
             data["sgst"] = sgst
             data["igst"] = igst
 
-        data["confidence_score"] = _calculate_confidence_score(data, f"AI_VISION ({model_name})")
+        data["confidence_score"] = _calculate_confidence_score(
+            data, f"AI_VISION ({model_name})"
+        )
         data["extraction_method"] = f"AI_VISION ({model_name})"
         data["doc_type"] = doc_type
         return data
     except Exception as e:  # noqa: BLE001
-        logger.error(f"LLM Vision extraction error: {e}. Falling back to default parser.")
+        logger.error(
+            f"LLM Vision extraction error: {e}. Falling back to default parser."
+        )
         fallback = _generate_fallback_extraction(doc_type, filename, raw_text)
-        fallback["confidence_score"] = _calculate_confidence_score(fallback, extraction_method)
+        fallback["confidence_score"] = _calculate_confidence_score(
+            fallback, extraction_method
+        )
         fallback["extraction_method"] = extraction_method
         fallback["doc_type"] = doc_type
         return fallback

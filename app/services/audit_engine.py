@@ -1,3 +1,5 @@
+"""Deterministic and AI-assisted audit flag evaluation for extracted documents."""
+
 import json
 from typing import Any
 
@@ -11,7 +13,9 @@ class AuditEngine:
     """Evaluates raw document records against deterministic & AI audit rules."""
 
     @staticmethod
-    def evaluate_document(doc: DocumentRecord, session: Session | None = None) -> dict[str, Any]:
+    def evaluate_document(
+        doc: DocumentRecord, session: Session | None = None
+    ) -> dict[str, Any]:
         flags: list[dict[str, Any]] = []
         raw_data: dict[str, Any] = {}
 
@@ -67,7 +71,10 @@ class AuditEngine:
             )
 
         if not doc.vendor_name or doc.vendor_name.strip().lower() in [
-            "unassigned vendor", "unknown", "unknown_vendor", "extracted vendor"
+            "unassigned vendor",
+            "unknown",
+            "unknown_vendor",
+            "extracted vendor",
         ]:
             flags.append(
                 {
@@ -78,7 +85,11 @@ class AuditEngine:
                 }
             )
 
-        if not doc.invoice_number or doc.invoice_number.strip().lower() in ["unknown_inv", "inv-pending", ""]:
+        if not doc.invoice_number or doc.invoice_number.strip().lower() in [
+            "unknown_inv",
+            "inv-pending",
+            "",
+        ]:
             flags.append(
                 {
                     "code": "MISSING_INVOICE_NUMBER",

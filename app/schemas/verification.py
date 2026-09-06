@@ -15,7 +15,9 @@ class AuditFlag(BaseModel):
 
 
 class DocumentAuditResult(BaseModel):
-    is_valid: bool = Field(description="True if zero CRITICAL or HIGH flags were raised")
+    is_valid: bool = Field(
+        description="True if zero CRITICAL or HIGH flags were raised"
+    )
     overall_status: Literal["VERIFIED", "NEEDS_REVIEW", "REJECTED"] = Field(...)
     flags: list[AuditFlag] = Field(
         default_factory=list, description="List of raised rule flags"

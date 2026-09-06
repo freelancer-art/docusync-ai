@@ -9,4 +9,8 @@ def test_dashboard_renders_auth_workflow():
 
     assert not app.exception
     assert any("DocuSync AI Portal" in title.value for title in app.title)
-    assert app.radio[0].options == ["Sign In", "Register New CA Firm", "Register Client"]
+    assert app.radio[0].options == [
+        "Sign In",
+        "Register New CA Firm",
+        "Register Client",
+    ]

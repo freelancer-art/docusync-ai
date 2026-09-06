@@ -80,7 +80,7 @@ class TestAuditEngineIntegration:
         extracted_data = {
             "vendor_name": "Test Vendor",
             "vendor_gstin": "27AAAAA0000A1Z5",  # Maharashtra (27)
-            "buyer_gstin": "07BBBBB0000B1Z2",   # Delhi (07) - Inter-state
+            "buyer_gstin": "07BBBBB0000B1Z2",  # Delhi (07) - Inter-state
             "taxable_amount": 1000.0,
             "cgst": 90.0,  # Invalid tax head for inter-state (should be IGST)
             "sgst": 90.0,

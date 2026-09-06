@@ -1,4 +1,7 @@
+"""Request correlation and JSON logging utilities for the API runtime."""
+
 import contextvars
+import json
 import logging
 import uuid
 
@@ -13,6 +16,7 @@ correlation_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
 
 
 def get_correlation_id() -> str:
+    """Return the correlation ID associated with the current request context."""
     return correlation_id_ctx.get()
 
 
@@ -22,6 +26,7 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        """Attach a request ID to the context and response for distributed tracing."""
         req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         token = correlation_id_ctx.set(req_id)
 
@@ -38,6 +43,7 @@ class StructuredLogFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
+        """Serialize a log record as valid JSON for local and hosted log collectors."""
         log_data = {
             "timestamp": self.formatTime(record, self.datefmt),
             "level": record.levelname,
@@ -47,4 +53,14 @@ class StructuredLogFormatter(logging.Formatter):
         }
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
-        return str(log_data)
+        return json.dumps(log_data, default=str)
+
+
+def configure_logging(level: str = "INFO") -> None:
+    """Configure the application root logger without duplicating handlers."""
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level.upper())
+    if not root_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(StructuredLogFormatter())
+        root_logger.addHandler(handler)

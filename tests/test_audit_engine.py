@@ -186,12 +186,14 @@ def test_duplicate_billing_detection(session: Session):
         invoice_number="INV-2026-001",
         total_amount=5000.0,
         overall_status="NEEDS_REVIEW",
-        raw_json_data=json.dumps({
-            "vendor_name": "Acme Corp",
-            "invoice_number": "INV-2026-001",
-            "vendor_gstin": "27AAACT2727Q1ZW",
-            "total_amount": 5000.0,
-        }),
+        raw_json_data=json.dumps(
+            {
+                "vendor_name": "Acme Corp",
+                "invoice_number": "INV-2026-001",
+                "vendor_gstin": "27AAACT2727Q1ZW",
+                "total_amount": 5000.0,
+            }
+        ),
     )
     session.add(new_doc)
     session.commit()

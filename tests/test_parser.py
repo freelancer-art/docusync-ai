@@ -26,4 +26,7 @@ def test_parser_uses_configured_vision_model(monkeypatch):
 
     assert result["vendor_name"] == "Acme"
     assert result["total_amount"] == 10.0
-    assert mock_client.models.generate_content.call_args.kwargs["model"] == "configured-model"
+    assert (
+        mock_client.models.generate_content.call_args.kwargs["model"]
+        == "configured-model"
+    )

@@ -1,9 +1,15 @@
+"""Legacy parser facade for structured document parsing and fallback handling."""
+
+import logging
+
 from google import genai
 from google.genai import types
 from pydantic import ValidationError
 
 from app.config import settings
 from app.schemas.document import ExtractedInvoiceData
+
+logger = logging.getLogger(__name__)
 
 
 def get_parser_client():
@@ -49,7 +55,7 @@ def parse_document_data(file_bytes: bytes, mime_type: str) -> dict:
         structured_data = ExtractedInvoiceData.model_validate_json(response.text)
         return structured_data.model_dump()
 
-    except (ValidationError, ValueError, AttributeError, RuntimeError) as e:
-        print(f"LLM Parsing failed: {e!s}")
+    except (ValidationError, ValueError, AttributeError, RuntimeError):
+        logger.exception("LLM parsing failed")
         # Return empty structured schema fallback on failure
         return ExtractedInvoiceData().model_dump()

@@ -1,3 +1,5 @@
+"""Payment amount and status reconciliation rules for invoice records."""
+
 from typing import Any
 
 from sqlmodel import Session, select

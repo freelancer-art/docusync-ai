@@ -1,3 +1,5 @@
+"""Tally XML voucher generation for verified accounting documents."""
+
 import json
 from typing import Any
 from xml.sax.saxutils import escape
@@ -24,7 +26,9 @@ class TallyExporterService:
 
         created_at = getattr(record, "created_at", None)
         voucher_date = (
-            created_at.strftime("%Y%m%d") if created_at else settings.TALLY_FALLBACK_DATE
+            created_at.strftime("%Y%m%d")
+            if created_at
+            else settings.TALLY_FALLBACK_DATE
         )
 
         return f"""          <VOUCHER VCHTYPE="Purchase" ACTION="Create">

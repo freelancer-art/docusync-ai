@@ -1,3 +1,5 @@
+"""Validation and tenant scoping helpers for AI-generated ledger SQL."""
+
 import re
 from typing import Any
 
@@ -5,7 +7,9 @@ FORBIDDEN_SQL_PATTERN = re.compile(
     r"\b(attach|alter|create|delete|detach|drop|insert|pragma|replace|update|vacuum)\b",
     re.IGNORECASE,
 )
-TAIL_CLAUSE_PATTERN = re.compile(r"\b(group\s+by|having|order\s+by|limit)\b", re.IGNORECASE)
+TAIL_CLAUSE_PATTERN = re.compile(
+    r"\b(group\s+by|having|order\s+by|limit)\b", re.IGNORECASE
+)
 
 
 def build_safe_ledger_query(
@@ -32,7 +36,9 @@ def _validate_generated_select(generated_sql: str) -> str:
     if not upper_sql.startswith("SELECT"):
         raise ValueError("Generated statement must start with SELECT.")
     if ";" in sql:
-        raise ValueError("Generated statement must be a single SELECT without semicolons.")
+        raise ValueError(
+            "Generated statement must be a single SELECT without semicolons."
+        )
     if "--" in sql or "/*" in sql or "*/" in sql:
         raise ValueError("Generated statement must not contain SQL comments.")
     if FORBIDDEN_SQL_PATTERN.search(sql):
@@ -53,7 +59,7 @@ def _inject_client_scope(sql: str) -> str:
     tail_match = TAIL_CLAUSE_PATTERN.search(sql)
     if tail_match:
         body = sql[: tail_match.start()].rstrip()
-        tail = " " + sql[tail_match.start():].lstrip()
+        tail = " " + sql[tail_match.start() :].lstrip()
     else:
         body = sql
         tail = ""
@@ -61,7 +67,7 @@ def _inject_client_scope(sql: str) -> str:
     where_match = re.search(r"\bwhere\b", body, flags=re.IGNORECASE)
     if where_match:
         before_where = body[: where_match.end()]
-        after_where = body[where_match.end():].strip()
+        after_where = body[where_match.end() :].strip()
         scoped_body = (
             f"{before_where} client_id = :tenant_client_id AND ({after_where})"
         )

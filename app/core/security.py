@@ -1,3 +1,5 @@
+"""JWT authentication helpers and raw file-signature validation rules."""
+
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any

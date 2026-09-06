@@ -1,3 +1,5 @@
+"""GSTIN format, state-code, PAN, and checksum validation service."""
+
 import re
 from typing import Any, ClassVar
 
