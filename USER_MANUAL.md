@@ -172,7 +172,7 @@ Use the generated OpenAPI page at `/docs` for exact request and response schemas
 
 ## 8. Google Drive Intake
 
-Google Drive is the supported real external connector. Dropbox and Gmail currently have deterministic mock adapters only.
+External connector intake is optional and disabled by default. Google Drive is the supported real external connector. Dropbox and Gmail currently have deterministic mock adapters only.
 
 ### Service-account approach
 
@@ -230,7 +230,17 @@ Set the log level with:
 LOG_LEVEL=DEBUG
 ```
 
+Optional operations settings:
+
+```env
+METRICS_ENABLED=true
+OBSERVABILITY_ALERT_WEBHOOK_URL=https://your-alert-webhook
+CONNECTOR_SYNC_ENABLED=false
+CONNECTOR_SYNC_INTERVAL_MINUTES=60
+```
+
 API logs are JSON and include an `X-Request-ID` correlation ID. Send an existing request ID in that header to trace a request across middleware and logs.
+When enabled, `/metrics` exposes Prometheus-compatible request counters. Readiness failures can send a JSON alert to the configured webhook. Connector sync runs through Celery beat only when explicitly enabled and authenticated connector clients are registered in the worker process.
 
 Useful checks:
 
@@ -269,8 +279,8 @@ Add or update focused tests for behavior changes. Prefer dependency injection fo
 
 ## 14. Known Deferred Work
 
-- Production Dropbox and Gmail provider adapters.
+- Production Dropbox and Gmail provider adapters; all external connector intake remains optional.
 - OAuth callback and refresh-token lifecycle management for Google Drive.
 - Secret-manager integration for connector credentials.
-- Central metrics, tracing export, and alerting.
+- Central metrics, log sink, tracing export, and alert routing configuration.
 - Incremental docstring coverage for older internal helpers.

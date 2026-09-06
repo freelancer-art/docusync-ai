@@ -50,6 +50,9 @@ This document outlines the responsibility and integration role of every file in 
 * **`app/core/logging.py`**
   Configures valid JSON logs and request correlation IDs for API diagnostics.
 
+* **`app/core/observability.py`**
+  Records request metrics, exposes Prometheus-compatible output, provides correlation-based trace context, and sends optional readiness alerts.
+
 * **`app/core/ocr_engine.py`**[cite: 14]
   Document text extraction engine using `pdfplumber` for digital PDFs with fallback to `pytesseract` and `poppler` for scanned images[cite: 14].
 
@@ -114,6 +117,9 @@ This document outlines the responsibility and integration role of every file in 
 
 * **`app/services/storage_service.py`**
   Local/Supabase storage abstraction with byte retrieval, public URLs, and bounded signed Supabase URLs.
+
+* **`app/tasks/connector_sync.py`**
+  Disabled-by-default Celery beat task that syncs enabled tenant connector bindings when authenticated clients are registered.
 
 ---
 

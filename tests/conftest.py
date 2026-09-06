@@ -3,7 +3,6 @@ import os
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-docusync-32b")
 os.environ["DATABASE_URL"] = "sqlite:///./storage/test_docusync.db"
 
-import bcrypt
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -12,14 +11,6 @@ from sqlmodel import Session, SQLModel, create_engine, delete
 
 from app.core.database import DocumentRecord, User, UserRole, get_session
 from app.main import app
-
-# Workaround for passlib + bcrypt >= 4.0.0 compatibility
-if not hasattr(bcrypt, "__about__"):
-
-    class About:
-        __version__ = getattr(bcrypt, "__version__", "4.0.1")
-
-    bcrypt.__about__ = About()
 
 TEST_DATABASE_URL = "sqlite:///./storage/test_docusync.db"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})

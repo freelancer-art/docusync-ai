@@ -22,7 +22,7 @@ Review date: 2026-09-06
 Test baseline:
 
 - `pytest` is not available directly on the shell path.
-- `uv run --extra dev pytest` passes after connector, storage, diagnostics, and documentation coverage work: **98 passed, 3 warnings**.
+- `uv run --extra dev pytest` passes after connector, storage, diagnostics, and documentation coverage work: **101 passed, 0 warnings**.
 - `uv run --extra dev ruff check app tests` passes.
 - `uv run --extra dev ruff format --check app tests` passes.
 - `git diff --check` passes.
@@ -176,7 +176,7 @@ Test baseline:
   * [x] Add deterministic Dropbox and Gmail mock adapters for development and tests.
   * [x] Enforce connector binding to the requested tenant and deduplicate by provider source ID and content hash.
   * [x] Add isolated ingestion, authentication, tenant-boundary, and duplicate-file tests.
-  * [ ] Implement Dropbox and Gmail provider adapters.
+  * [x] Keep Google Drive, Dropbox, and Gmail intake optional and disabled by default; production provider adapters remain deferred.
 
 ---
 
@@ -211,3 +211,11 @@ Test baseline:
 * [x] Align pre-commit with the project Ruff version and add whitespace validation.
 * [ ] Continue incremental docstring coverage for legacy internal helpers when those modules are next changed.
 * [ ] Add production observability integration (central log sink, metrics, and alerting) before launch.
+
+## ⚙️ Operations Follow-up
+
+* [x] Add disabled-by-default Celery beat scheduling for registered connector sync.
+* [x] Add Alembic migration for connector binding and imported-file tables.
+* [x] Remove Passlib and deprecated SQLModel query warnings.
+* [x] Add vendor-neutral request metrics, correlation-based trace context, and optional readiness alert webhook.
+* [ ] Configure a production metrics/logging/tracing backend and alert routes during deployment.

@@ -7,7 +7,14 @@ from sqlmodel import SQLModel
 from alembic import context
 
 # Import database module to ensure all models register with SQLModel.metadata
-from app.core.database import DocumentRecord, User  # noqa: F401
+from app.core.database import (  # noqa: F401
+    ConnectorBinding,
+    DocumentRecord,
+    ImportedFile,
+    MCPConfirmationToken,
+    MCPToolInvocation,
+    User,
+)
 
 config = context.config
 

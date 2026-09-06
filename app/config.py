@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "DocuSync AI"
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
+    METRICS_ENABLED: bool = True
+    OBSERVABILITY_ALERT_WEBHOOK_URL: str | None = None
+    CONNECTOR_SYNC_ENABLED: bool = False
+    CONNECTOR_SYNC_INTERVAL_MINUTES: int = 60
     ALLOWED_ORIGINS: list[str] = [
         "https://app.docusync.ai",
         "http://localhost:8501",

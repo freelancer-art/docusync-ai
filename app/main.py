@@ -19,6 +19,7 @@ from app.core.database import engine, init_db
 from app.core.input_validation import PayloadSizeLimitMiddleware
 from app.core.logging import CorrelationIDMiddleware, configure_logging
 from app.core.middleware import setup_security_middleware
+from app.core.observability import MetricsMiddleware, metrics, send_alert
 
 configure_logging(settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
 # Register Middleware (Payload size limit registered early)
 app.add_middleware(PayloadSizeLimitMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
+if settings.METRICS_ENABLED:
+    app.add_middleware(MetricsMiddleware)
 
 allowed_origins = getattr(settings, "ALLOWED_ORIGINS", ["https://app.docusync.ai"])
 setup_security_middleware(app, allowed_origins=allowed_origins)
@@ -71,6 +74,16 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.get("/metrics", include_in_schema=False)
+def metrics_endpoint():
+    """Expose request counters in Prometheus text format when metrics are enabled."""
+    if not settings.METRICS_ENABLED:
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+    return Response(
+        content=metrics.prometheus(), media_type="text/plain; version=0.0.4"
+    )
+
+
 @app.get("/ready")
 def readiness_probe(response: Response):
     """Readiness probe verifying DB pool & Redis worker broker connectivity."""
@@ -100,6 +113,7 @@ def readiness_probe(response: Response):
 
     if not is_ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        send_alert(f"DocuSync readiness failure: {checks}")
 
     return {"status": "ready" if is_ready else "not_ready", "checks": checks}
 

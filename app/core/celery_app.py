@@ -32,6 +32,13 @@ celery_config = {
     # Retry defaults & Dead Letter Handling
     "task_acks_late": True,
     "worker_prefetch_multiplier": 1,
+    "beat_schedule": {
+        "sync-registered-connectors": {
+            "task": "sync_registered_connectors",
+            "schedule": settings.CONNECTOR_SYNC_INTERVAL_MINUTES * 60,
+            "options": {"expires": settings.CONNECTOR_SYNC_INTERVAL_MINUTES * 60},
+        }
+    },
 }
 
 # Attach SSL certificate settings required for Upstash TLS connections
@@ -44,3 +51,6 @@ if redis_url.startswith("rediss://"):
     )
 
 celery_app.conf.update(celery_config)
+
+# Import task modules after the app is configured so Celery discovers task names.
+import app.tasks.connector_sync  # noqa: F401

@@ -2,7 +2,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app.core.database import DocumentRecord, User, UserRole
@@ -61,16 +61,14 @@ def test_rag_context_scoping_client_vs_admin(session: Session):
     session.commit()
 
     # Query scoping for Client 1
-    c1_records = (
-        session.query(DocumentRecord)
-        .filter(DocumentRecord.client_id == client1.id)
-        .all()
-    )
+    c1_records = session.exec(
+        select(DocumentRecord).where(DocumentRecord.client_id == client1.id)
+    ).all()
     assert len(c1_records) == 1
     assert c1_records[0].vendor_name == "Vendor A"
 
     # Query scoping for CA Admin (All Records)
-    admin_records = session.query(DocumentRecord).all()
+    admin_records = session.exec(select(DocumentRecord)).all()
     assert len(admin_records) == 2
 
 

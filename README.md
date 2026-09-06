@@ -213,6 +213,8 @@ Connector ingestion is credential-injected so access tokens and service-account 
 
 Dropbox and Gmail use the same `DocumentConnector` protocol but do not yet have provider adapters.
 
+External connector intake and scheduled sync are optional and disabled by default. Enable `CONNECTOR_SYNC_ENABLED` only after registering authenticated connector clients in the Celery worker process.
+
 ---
 
 ## 📋 Project Roadmap

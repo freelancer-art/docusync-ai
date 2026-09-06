@@ -5,13 +5,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
 
 from app.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def safe_truncate_password(password: str) -> str:
@@ -158,7 +156,9 @@ class User(SQLModel, table=True):
             return False
         truncated_pwd = safe_truncate_password(password)
         try:
-            return pwd_context.verify(truncated_pwd, self.hashed_password)
+            return bcrypt.checkpw(
+                truncated_pwd.encode("utf-8"), self.hashed_password.encode("utf-8")
+            )
         except Exception:  # noqa: BLE001
             return False
 
@@ -169,7 +169,9 @@ class User(SQLModel, table=True):
         if password.startswith(("$2b$", "$2a$")):
             return password
         truncated_pwd = safe_truncate_password(password)
-        return pwd_context.hash(truncated_pwd)
+        return bcrypt.hashpw(truncated_pwd.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
 
 
 DATABASE_URL = settings.SQLALCHEMY_DATABASE_URI
