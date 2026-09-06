@@ -45,6 +45,18 @@ def process_document_task(self, doc_id: int, db_url: str | None = None):
 
             # 2. Update record metadata
             doc.raw_json_data = json.dumps(extracted_data)
+            doc.document_type = extracted_data.get("doc_type", doc.document_type)
+            doc.classification_confidence = extracted_data.get(
+                "classification_confidence"
+            )
+            doc.classification_reasoning = extracted_data.get(
+                "classification_reasoning"
+            )
+            if (
+                doc.document_type == "UNKNOWN"
+                or (doc.classification_confidence or 0.0) < 0.6
+            ):
+                doc.overall_status = "NEEDS_REVIEW"
             doc.vendor_name = extracted_data.get("vendor_name")
             doc.invoice_number = extracted_data.get("invoice_number")
             doc.total_amount = extracted_data.get("total_amount", 0.0)

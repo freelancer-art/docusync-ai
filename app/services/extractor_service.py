@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 from app.core import ocr_engine
 from app.core.groq_client import get_ai_client
+from app.schemas.document_type import DocumentClassification
+from app.services.bank_statement_csv import normalize_bank_statement_csv
 
 logger = logging.getLogger("docusync.extractor")
 
@@ -131,20 +133,60 @@ def extract_raw_text(file_input: bytes | str, filename: str) -> tuple[str, str, 
         return "", "FAILED", file_bytes
 
 
-def classify_document_text(text: str) -> str:
-    """Classifies raw text into TAX_INVOICE or BANK_STATEMENT using rule heuristics."""
+def classify_document(text: str) -> DocumentClassification:
+    """Classify text with explainable keyword matches and an unknown fallback."""
     lower_text = text.lower()
-    bank_keywords = [
+    bank_keywords = {
         "statement of account",
         "opening balance",
         "closing balance",
         "withdrawal",
         "deposit",
         "account number",
-    ]
-    if any(keyword in lower_text for keyword in bank_keywords):
-        return "BANK_STATEMENT"
-    return "TAX_INVOICE"
+        "transaction date",
+        "debit",
+        "credit",
+    }
+    invoice_keywords = {
+        "tax invoice",
+        "invoice number",
+        "invoice no",
+        "gstin",
+        "subtotal",
+        "cgst",
+        "sgst",
+        "igst",
+        "vendor",
+    }
+    bank_matches = [keyword for keyword in bank_keywords if keyword in lower_text]
+    invoice_matches = [keyword for keyword in invoice_keywords if keyword in lower_text]
+
+    if len(bank_matches) >= 2 and len(bank_matches) >= len(invoice_matches):
+        category = "BANK_STATEMENT"
+        matches = bank_matches
+    elif len(invoice_matches) >= 2:
+        category = "TAX_INVOICE"
+        matches = invoice_matches
+    else:
+        category = "UNKNOWN"
+        matches = bank_matches + invoice_matches
+
+    confidence = min(0.99, 0.55 + (0.1 * len(matches))) if matches else 0.2
+    reasoning = (
+        f"Matched keywords: {', '.join(matches)}."
+        if matches
+        else "No strong invoice or bank-statement indicators were detected."
+    )
+    return DocumentClassification(
+        document_type=category,
+        confidence_score=round(confidence, 2),
+        confidence_reasoning=reasoning,
+    )
+
+
+def classify_document_text(text: str) -> str:
+    """Return the legacy category string for callers that do not need metadata."""
+    return classify_document(text).document_type
 
 
 def _calculate_confidence_score(
@@ -175,10 +217,34 @@ def extract_structured_data(
     filename: str,
     doc_type: str | None = None,
 ) -> dict:
+    if filename.lower().endswith(".csv"):
+        if isinstance(file_input, bytes):
+            csv_content = file_input
+        else:
+            with open(file_input, "rb") as csv_file:
+                csv_content = csv_file.read()
+        normalized = normalize_bank_statement_csv(csv_content, filename)
+        result = normalized.model_dump()
+        result.update(
+            {
+                "doc_type": "BANK_STATEMENT",
+                "extraction_method": "CSV_NORMALIZED",
+                "classification_confidence": 0.95 if not normalized.errors else 0.7,
+                "classification_reasoning": (
+                    "CSV headers matched supported bank-statement aliases."
+                ),
+                "confidence_score": round(
+                    len(normalized.transactions) / max(normalized.total_rows, 1), 2
+                ),
+            }
+        )
+        return result
+
     raw_text, extraction_method, file_bytes = extract_raw_text(file_input, filename)
 
+    classification = classify_document(raw_text) if not doc_type else None
     if not doc_type:
-        doc_type = classify_document_text(raw_text)
+        doc_type = classification.document_type
 
     base64_images = convert_pdf_to_images_base64(file_bytes) if file_bytes else []
 
@@ -191,10 +257,13 @@ def extract_structured_data(
         )
         fallback["extraction_method"] = extraction_method
         fallback["doc_type"] = doc_type
+        if classification:
+            fallback["classification_confidence"] = classification.confidence_score
+            fallback["classification_reasoning"] = classification.confidence_reasoning
         return fallback
 
     target_schema = (
-        TaxInvoiceSchema if doc_type == "TAX_INVOICE" else BankStatementSchema
+        BankStatementSchema if doc_type == "BANK_STATEMENT" else TaxInvoiceSchema
     )
 
     messages = [
@@ -259,6 +328,9 @@ def extract_structured_data(
         )
         data["extraction_method"] = f"AI_VISION ({model_name})"
         data["doc_type"] = doc_type
+        if classification:
+            data["classification_confidence"] = classification.confidence_score
+            data["classification_reasoning"] = classification.confidence_reasoning
         return data
     except Exception as e:  # noqa: BLE001
         logger.error(
@@ -270,6 +342,9 @@ def extract_structured_data(
         )
         fallback["extraction_method"] = extraction_method
         fallback["doc_type"] = doc_type
+        if classification:
+            fallback["classification_confidence"] = classification.confidence_score
+            fallback["classification_reasoning"] = classification.confidence_reasoning
         return fallback
 
 

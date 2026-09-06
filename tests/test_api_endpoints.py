@@ -1,5 +1,8 @@
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from app.api.v1.extraction import _validated_upload_content
 from app.core.database import DocumentRecord, User
 
 
@@ -154,3 +157,11 @@ def test_document_file_url_is_tenant_scoped(
     assert own_response.json()["expires_in"] == 120
     assert forbidden_response.status_code == 403
     assert admin_response.status_code == 200
+
+
+def test_csv_upload_validation_accepts_utf8_and_rejects_binary():
+    assert _validated_upload_content(
+        "statement.csv", b"date,amount\n2026-01-01,100"
+    ) == ("statement.csv")
+    with pytest.raises(HTTPException, match="valid UTF-8"):
+        _validated_upload_content("statement.csv", b"\xff\xfe\x00")

@@ -14,6 +14,7 @@ from app.core.database import DocumentRecord, User, UserRole, engine, init_db
 from app.core.groq_client import get_ai_client
 from app.mcp_server import run_ledger_query
 from app.services.audit_engine import process_document_audit
+from app.services.classification import rerun_document_classification
 from app.services.extractor_service import extractor_service
 from app.services.gstin_validator import gstin_validator
 from app.services.tally_exporter import tally_exporter
@@ -215,14 +216,18 @@ with tab_ingest:
         st.caption(f"Target Account: **{user.full_name}** (ID: {user.id})")
 
     uploaded_file = st.file_uploader(
-        "Choose a Tax Invoice or Bank Statement PDF", type=["pdf"]
+        "Choose a Tax Invoice or Bank Statement file",
+        type=["pdf", "png", "jpg", "jpeg", "csv"],
     )
 
     if (uploaded_file is not None and target_client_id is not None) and st.button(
         "Process & Save", type="primary"
     ):
         with st.spinner("Processing, extracting & auditing document..."):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            upload_suffix = os.path.splitext(uploaded_file.name)[1].lower() or ".bin"
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=upload_suffix
+            ) as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
                 tmp_path = tmp_file.name
 
@@ -244,6 +249,12 @@ with tab_ingest:
                     total_amount=float(total_amount or 0.0),
                     payment_status="UNPAID",
                     overall_status="NEEDS_REVIEW",
+                    classification_confidence=extraction_result.get(
+                        "classification_confidence"
+                    ),
+                    classification_reasoning=extraction_result.get(
+                        "classification_reasoning"
+                    ),
                     raw_json_data=json.dumps(extraction_result),
                     audit_flags_json=json.dumps([]),
                     created_at=datetime.now(timezone.utc),
@@ -272,6 +283,41 @@ with tab_ingest:
 # ---------------------------------------------------------
 with tab_audit:
     st.header("Document Audit Ledger")
+
+    if is_admin:
+        with Session(engine) as session:
+            review_records = session.exec(
+                select(DocumentRecord).where(
+                    (DocumentRecord.document_type == "UNKNOWN")
+                    | (DocumentRecord.classification_confidence < 0.6)
+                )
+            ).all()
+
+        with st.expander(f"🧭 Categorization Review Queue ({len(review_records)})"):
+            if not review_records:
+                st.success("No unknown or low-confidence documents require review.")
+            for review_record in review_records:
+                st.write(
+                    f"**#{review_record.id} {review_record.filename}** | "
+                    f"Type: `{review_record.document_type}` | "
+                    f"Confidence: `{review_record.classification_confidence or 0:.2f}`"
+                )
+                st.caption(
+                    review_record.classification_reasoning or "No reasoning recorded."
+                )
+                if st.button(
+                    "Rerun classification",
+                    key=f"rerun_classification_{review_record.id}",
+                ):
+                    with Session(engine) as session:
+                        current_record = session.get(DocumentRecord, review_record.id)
+                        if current_record:
+                            try:
+                                rerun_document_classification(current_record, session)
+                                st.success("Classification rerun complete.")
+                                st.rerun()
+                            except FileNotFoundError:
+                                st.error("Stored document file was not found.")
 
     with st.expander("🔍 Quick GSTIN Verification Tool"):
         st.caption(

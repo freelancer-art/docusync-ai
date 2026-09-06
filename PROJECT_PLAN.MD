@@ -219,3 +219,20 @@ Test baseline:
 * [x] Remove Passlib and deprecated SQLModel query warnings.
 * [x] Add vendor-neutral request metrics, correlation-based trace context, and optional readiness alert webhook.
 * [ ] Configure a production metrics/logging/tracing backend and alert routes during deployment.
+
+## 🚀 Product Features: First Market Slice
+
+**Agreed scope:** implement document categorization first; defer reminders and bank reconciliation until the categorization contract is stable. The first input scope is invoices and bank statements, with PDF, PNG, JPEG, and UTF-8 CSV support. Rules decide the initial classification; AI remains an optional suggestion layer.
+
+* [x] Define initial categories: `TAX_INVOICE`, `BANK_STATEMENT`, and `UNKNOWN`.
+* [x] Add explainable keyword classification with confidence score and reasoning.
+* [x] Route unknown/low-confidence documents to `NEEDS_REVIEW`.
+* [x] Accept UTF-8 CSV input for bank-statement workflows while retaining binary magic-byte checks for PDF/images.
+* [x] Persist classification confidence and reasoning on `DocumentRecord`.
+* [x] Normalize common bank CSV columns, dates, signed amounts, balances, references, and malformed-row reports.
+* [x] Add a CA-admin review queue view for unknown/low-confidence documents.
+* [x] Add a protected rerun-classification action; category correction is deferred by decision.
+* [ ] Add automated bank reconciliation using normalized uploaded bank statements.
+* [ ] Add compliance calendar and client reminder drafts.
+* [ ] Add official-source tax RAG assistant.
+* [ ] Add explainable ITC anomaly/risk scoring.

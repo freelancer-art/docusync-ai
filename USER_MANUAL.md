@@ -124,6 +124,16 @@ The repository also provides `start.sh` for the deployment process, which starts
 
 Uploads are checked by file signature, not just filename extension. Path traversal names are sanitized before storage.
 
+### Document categorization
+
+The first categorization slice supports `TAX_INVOICE`, `BANK_STATEMENT`, and `UNKNOWN`. PDF, PNG, JPEG, and UTF-8 CSV files are accepted. Classification uses explainable rules and stores a confidence score plus keyword reasoning. Unknown or low-confidence documents remain in `NEEDS_REVIEW` for CA attention rather than being silently assigned.
+
+CSV bank statements are normalized into structured transactions. Common aliases such as `date`, `narration`, `description`, `debit`, `credit`, `amount`, `balance`, `UTR`, and `reference` are supported. Dates are normalized to ISO format, debit amounts are represented as negative signed `amount` values, credit amounts as positive values, and malformed rows are returned in an `errors` list with their source row and raw values. The original uploaded CSV remains stored under its document filename for audit evidence.
+
+Category correction remains deferred by design. Reprocessing through the rerun action is the supported way to obtain a new classification.
+
+CA administrators can use the Categorization Review Queue in the Audit Ledger to inspect confidence and reasoning, then rerun classification. The rerun keeps the document in `NEEDS_REVIEW` so a human can inspect the result before approval.
+
 ### Review audit results
 
 A document can be `VERIFIED`, `NEEDS_REVIEW`, `REJECTED`, or `FAILED` during processing. CA administrators can edit supported fields, add auditor notes, and override the final status. Review critical flags before export.

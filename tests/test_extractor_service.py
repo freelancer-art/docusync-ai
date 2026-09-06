@@ -6,6 +6,7 @@ from app.services.audit_engine import AuditEngine
 from app.services.extractor_service import (
     LineItem,
     TaxInvoiceSchema,
+    classify_document,
     classify_document_text,
     extract_structured_data,
 )
@@ -53,6 +54,13 @@ class TestDocumentClassification:
     def test_classify_bank_statement(self):
         text = "Statement of Account\nOpening Balance: 5000.00\nClosing Balance: 12000.00\nWithdrawal: 200"
         assert classify_document_text(text) == "BANK_STATEMENT"
+
+    def test_classification_includes_reasoning_and_unknown_fallback(self):
+        result = classify_document("A document with no accounting indicators")
+
+        assert result.document_type == "UNKNOWN"
+        assert result.confidence_score < 0.6
+        assert "No strong" in result.confidence_reasoning
 
 
 class TestExtractorFallback:

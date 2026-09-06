@@ -9,6 +9,7 @@ class BankTransaction(BaseModel):
     )
     debit: float | None = Field(None, description="Amount debited/withdrawn")
     credit: float | None = Field(None, description="Amount credited/deposited")
+    amount: float = Field(description="Signed amount: credit positive, debit negative")
     balance: float | None = Field(None, description="Closing balance after transaction")
 
 

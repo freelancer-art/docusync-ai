@@ -23,7 +23,13 @@ router = APIRouter()
 UPLOAD_DIR = settings.UPLOAD_DIR
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {".pdf": "pdf", ".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg"}
+ALLOWED_EXTENSIONS = {
+    ".pdf": "pdf",
+    ".png": "png",
+    ".jpg": "jpeg",
+    ".jpeg": "jpeg",
+    ".csv": "csv",
+}
 
 
 def _validated_upload_content(filename: str | None, content: bytes) -> str:
@@ -36,13 +42,22 @@ def _validated_upload_content(filename: str | None, content: bytes) -> str:
     expected_signature = ALLOWED_EXTENSIONS.get(ext)
     if not expected_signature:
         raise HTTPException(
-            status_code=400, detail="Only PDF and image files are supported."
+            status_code=400, detail="Only PDF, image, and CSV files are supported."
         )
 
-    try:
-        actual_signature = validate_file_signature(content)
-    except InvalidFileTypeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if expected_signature == "csv":
+        try:
+            content.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(
+                status_code=400, detail="CSV files must be valid UTF-8 text."
+            ) from exc
+        actual_signature = "csv"
+    else:
+        try:
+            actual_signature = validate_file_signature(content)
+        except InvalidFileTypeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if actual_signature != expected_signature:
         raise HTTPException(
@@ -129,7 +144,7 @@ async def upload_document_async(
     # Initialize Database Record
     doc_record = DocumentRecord(
         filename=safe_filename,
-        document_type="TAX_INVOICE",
+        document_type="UNKNOWN",
         extraction_method="PENDING",
         overall_status="PROCESSING",
         client_id=target_client_id,

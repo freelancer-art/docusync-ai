@@ -98,7 +98,7 @@ This document outlines the responsibility and integration role of every file in 
   Deterministic audit engine that validates line-item math, cross-checks GST totals, validates GSTIN patterns, and computes severity levels[cite: 14].
 
 * **`app/services/extractor_service.py`**[cite: 14]
-  High-level extraction orchestrator coordinating OCR parsing, image-to-PDF rendering (`pypdfium2`), auto-classification, and vision-enabled LLM schema extractions[cite: 13, 14].
+  High-level extraction orchestrator coordinating OCR parsing, image-to-PDF rendering (`pypdfium2`), confidence-aware invoice/bank classification, and vision-enabled LLM schema extractions[cite: 13, 14].
 
 * **`app/services/gstin_validator.py`**[cite: 14]
   Regex pattern and state-code checksum validator for Indian GSTINs[cite: 14].
@@ -117,6 +117,12 @@ This document outlines the responsibility and integration role of every file in 
 
 * **`app/services/storage_service.py`**
   Local/Supabase storage abstraction with byte retrieval, public URLs, and bounded signed Supabase URLs.
+
+* **`app/services/classification.py`**
+  Shared CA-admin rerun workflow for re-extracting stored documents and persisting classification evidence.
+
+* **`app/services/bank_statement_csv.py`**
+  Normalizes common bank CSV column aliases, dates, debit/credit signs, balances, references, and malformed-row reports without discarding the original upload.
 
 * **`app/tasks/connector_sync.py`**
   Disabled-by-default Celery beat task that syncs enabled tenant connector bindings when authenticated clients are registered.

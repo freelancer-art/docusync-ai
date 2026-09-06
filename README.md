@@ -13,6 +13,8 @@ It automates file ingestion, document type classification, OCR fallback processi
 ## 🌟 Key Features & Hardening
 
 * **Multi-Document Auto-Routing:** Automatically classifies incoming uploads into supported document schemas (`TAX_INVOICE`, `BANK_STATEMENT`)[cite: 14].
+* **Confidence-Aware Categorization:** Rules classify invoices and bank statements, retain keyword reasoning, and route unknown or low-confidence files to `NEEDS_REVIEW`; UTF-8 CSV bank statements are accepted alongside PDF and image files.
+* **Categorization Review Queue:** CA administrators can inspect classification confidence/reasoning and rerun classification without allowing clients to mutate document categorization.
 * **Hybrid OCR & Vision Engine:** Extracts digital PDF text via `pdfplumber` with automatic fallback to **Tesseract OCR** and `pypdfium2`-based Gemini/Groq vision parsing[cite: 13, 14].
 * **Deterministic Rule-Based Auditor:** Evaluates extracted metadata against Indian GSTIN regex rules, line-item mathematical sums, and tax balance logic to assign severity flags (`VERIFIED`, `NEEDS_REVIEW`, `REJECTED`)[cite: 13, 14].
 * **Payment Reconciliation:** Tracks `payment_status` (`UNPAID`, `PARTIAL`, `PAID`) and `amount_paid` directly within the schema and user portal[cite: 10, 14].
