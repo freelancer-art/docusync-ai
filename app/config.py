@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     OBSERVABILITY_ALERT_WEBHOOK_URL: str | None = None
     CONNECTOR_SYNC_ENABLED: bool = False
     CONNECTOR_SYNC_INTERVAL_MINUTES: int = 60
+    REMINDER_DELIVERY_MODE: str = "mock"
+    REMINDER_DELIVERY_INTERVAL_MINUTES: int = 5
+    REMINDER_MAX_DELIVERY_ATTEMPTS: int = 3
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_USE_TLS: bool = True
     ALLOWED_ORIGINS: list[str] = [
         "https://app.docusync.ai",
         "http://localhost:8501",

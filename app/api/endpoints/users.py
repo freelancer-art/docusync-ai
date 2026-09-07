@@ -15,6 +15,7 @@ class UserCreateSchema(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=6)
     role: UserRole = UserRole.CLIENT
+    email: str | None = None
 
 
 class UserResponseSchema(BaseModel):
@@ -22,12 +23,14 @@ class UserResponseSchema(BaseModel):
     username: str
     full_name: str
     role: UserRole
+    email: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdateSchema(BaseModel):
     full_name: str | None = None
+    email: str | None = None
     password: str | None = None
     role: UserRole | None = None
 
@@ -63,6 +66,7 @@ def create_user(
     new_user = User(
         username=user_in.username,
         full_name=user_in.full_name,
+        email=user_in.email,
         hashed_password=hashed_pw,
         role=user_in.role,
     )
@@ -115,6 +119,8 @@ def update_user(
 
     if user_in.full_name is not None:
         user.full_name = user_in.full_name
+    if user_in.email is not None:
+        user.email = user_in.email
     if user_in.role is not None:
         user.role = user_in.role
     if user_in.password is not None:

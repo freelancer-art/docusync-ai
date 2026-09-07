@@ -15,6 +15,7 @@ class UserRegisterRequest(BaseModel):
     username: str
     password: str
     full_name: str
+    email: str | None = None
 
 
 class ClientResponse(BaseModel):
@@ -22,6 +23,7 @@ class ClientResponse(BaseModel):
     username: str
     full_name: str
     role: str
+    email: str | None = None
 
 
 @router.post("/login")
@@ -63,6 +65,7 @@ async def register_ca_admin(
     ca_user = User(
         username=payload.username,
         full_name=payload.full_name,
+        email=payload.email,
         role=UserRole.CA_ADMIN,
         hashed_password=User.hash_password(payload.password),
     )
@@ -75,6 +78,7 @@ async def register_ca_admin(
         username=ca_user.username,
         full_name=ca_user.full_name,
         role=ca_user.role,
+        email=ca_user.email,
     )
 
 
@@ -104,6 +108,7 @@ async def onboard_client(
     client_user = User(
         username=payload.username,
         full_name=payload.full_name,
+        email=payload.email,
         role=UserRole.CLIENT,
         hashed_password=User.hash_password(payload.password),
     )
@@ -116,6 +121,7 @@ async def onboard_client(
         username=client_user.username,
         full_name=client_user.full_name,
         role=client_user.role,
+        email=client_user.email,
     )
 
 

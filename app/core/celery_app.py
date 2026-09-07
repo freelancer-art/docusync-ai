@@ -37,7 +37,11 @@ celery_config = {
             "task": "sync_registered_connectors",
             "schedule": settings.CONNECTOR_SYNC_INTERVAL_MINUTES * 60,
             "options": {"expires": settings.CONNECTOR_SYNC_INTERVAL_MINUTES * 60},
-        }
+        },
+        "deliver-scheduled-reminders": {
+            "task": "deliver_scheduled_reminders",
+            "schedule": settings.REMINDER_DELIVERY_INTERVAL_MINUTES * 60,
+        },
     },
 }
 
@@ -53,4 +57,7 @@ if redis_url.startswith("rediss://"):
 celery_app.conf.update(celery_config)
 
 # Import task modules after the app is configured so Celery discovers task names.
-import app.tasks.connector_sync  # noqa: F401
+from app.tasks import connector_sync as connector_sync_tasks
+from app.tasks import reminders as reminder_tasks
+
+_TASK_MODULES = (connector_sync_tasks, reminder_tasks)

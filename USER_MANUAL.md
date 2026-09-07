@@ -169,8 +169,9 @@ CA administrators can create tenant-scoped compliance deadlines with a filing pe
 - Mark a deadline complete with `POST /api/compliance/deadlines/{id}/complete`.
 - Generate an unsent draft with `POST /api/compliance/deadlines/{id}/reminder-drafts`.
 - View drafts with `GET /api/compliance/reminder-drafts`.
+- Approve and schedule a draft with `POST /api/compliance/reminder-drafts/{id}/approve`.
 
-Deadline title and period combinations are unique per tenant, dates must use `YYYY-MM-DD`, and completed deadlines cannot receive new reminder drafts.
+Approved drafts are delivered by the Celery reminder task when their scheduled time arrives. Delivery defaults to a mock channel; configure `REMINDER_DELIVERY_MODE=smtp` plus the `SMTP_*` settings only in an environment prepared to send email. Delivery records `SENT` or `FAILED`, increments attempts, and retains the last error. Deadline title and period combinations are unique per tenant, dates must use `YYYY-MM-DD`, and completed deadlines cannot receive new reminder drafts.
 
 ## 7. REST API Quick Reference
 
@@ -203,6 +204,7 @@ Important endpoints:
 | `POST /api/compliance/deadlines/{id}/complete` | Complete a deadline | CA admin |
 | `POST /api/compliance/deadlines/{id}/reminder-drafts` | Generate an unsent reminder draft | CA admin |
 | `GET /api/compliance/reminder-drafts` | List accessible reminder drafts | Authenticated |
+| `POST /api/compliance/reminder-drafts/{id}/approve` | Approve and schedule a reminder | CA admin |
 | `GET /api/documents/export/zoho` | Download Zoho CSV | CA admin |
 | `GET /api/documents/export/tally` | Download Tally XML | CA admin |
 

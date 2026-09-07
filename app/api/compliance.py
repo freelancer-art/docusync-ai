@@ -1,5 +1,7 @@
 """Tenant-scoped compliance calendar and reminder draft endpoints."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -13,6 +15,7 @@ from app.core.database import (
 )
 from app.core.security import get_current_user
 from app.services.compliance import (
+    approve_reminder_draft,
     complete_deadline,
     create_deadline,
     create_reminder_draft,
@@ -32,6 +35,10 @@ class DeadlineCreateRequest(BaseModel):
 
 class ReminderDraftCreateRequest(BaseModel):
     recipient_user_id: int
+
+
+class ReminderApprovalRequest(BaseModel):
+    scheduled_for: datetime | None = None
 
 
 @router.get("/deadlines", response_model=list[ComplianceDeadline])
@@ -120,3 +127,27 @@ def draft_deadline_reminder(
         return create_reminder_draft(session, deadline, recipient, current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/reminder-drafts/{draft_id}/approve", response_model=ReminderDraft)
+def approve_reminder(
+    draft_id: int,
+    payload: ReminderApprovalRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Approve a draft and schedule it for provider delivery."""
+    if current_user.role != UserRole.CA_ADMIN:
+        raise HTTPException(status_code=403, detail="CA Admin access required")
+    draft = session.get(ReminderDraft, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Reminder draft not found")
+    try:
+        return approve_reminder_draft(
+            session,
+            draft,
+            approved_by=current_user.id,
+            scheduled_for=payload.scheduled_for,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

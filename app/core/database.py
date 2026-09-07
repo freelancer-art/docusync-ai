@@ -155,6 +155,12 @@ class ReminderDraft(SQLModel, table=True):
     subject: str
     body: str
     status: str = "DRAFT"
+    approved_by: int | None = Field(default=None, foreign_key="user.id")
+    approved_at: datetime | None = None
+    scheduled_for: datetime | None = None
+    sent_at: datetime | None = None
+    delivery_attempts: int = 0
+    last_error: str | None = None
     created_by: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -213,6 +219,7 @@ class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     full_name: str
+    email: str | None = Field(default=None, index=True)
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
 

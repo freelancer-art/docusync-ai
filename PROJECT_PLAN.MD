@@ -235,6 +235,6 @@ Test baseline:
 * [x] Add initial automated bank reconciliation using normalized uploaded bank statements, with tenant-scoped persistence, deterministic matching, ambiguity suggestions, and idempotent reruns.
 * [x] Add reconciliation approval workflow and apply approved bank matches to invoice payment totals with idempotency and audit metadata.
 * [x] Add tenant-scoped compliance calendar and unsent client reminder drafts with completion tracking and access controls.
-* [ ] Add reminder delivery channels and scheduled notifications.
+* [x] Add reminder delivery channels and scheduled notifications with CA approval, mock/SMTP providers, Celery scheduling, retries, and delivery status tracking.
 * [ ] Add official-source tax RAG assistant.
 * [ ] Add explainable ITC anomaly/risk scoring.

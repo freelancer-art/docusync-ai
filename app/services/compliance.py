@@ -1,6 +1,6 @@
 """Compliance deadline tracking and unsent client reminder draft generation."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlmodel import Session, select
 
@@ -91,6 +91,30 @@ def create_reminder_draft(
         body=body,
         created_by=created_by,
     )
+    session.add(draft)
+    session.commit()
+    session.refresh(draft)
+    return draft
+
+
+def approve_reminder_draft(
+    session: Session,
+    draft: ReminderDraft,
+    approved_by: int,
+    scheduled_for: datetime | None = None,
+) -> ReminderDraft:
+    """Approve a draft and schedule it for delivery without sending immediately."""
+    if draft.status not in {"DRAFT", "FAILED"}:
+        raise ValueError("Only draft or failed reminders can be approved")
+    if scheduled_for is None:
+        scheduled_for = datetime.now(timezone.utc) + timedelta(minutes=1)
+    if scheduled_for.tzinfo is None:
+        scheduled_for = scheduled_for.replace(tzinfo=timezone.utc)
+    draft.status = "SCHEDULED"
+    draft.approved_by = approved_by
+    draft.approved_at = datetime.now(timezone.utc)
+    draft.scheduled_for = scheduled_for
+    draft.last_error = None
     session.add(draft)
     session.commit()
     session.refresh(draft)

@@ -1,9 +1,13 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlmodel import Session
 
 from app.core.database import ReminderDraft
 from app.services.compliance import create_deadline
+from app.services.reminder_delivery import MockReminderDelivery
+from app.tasks import reminders as reminder_tasks
 
 
 async def _login(async_client: AsyncClient, username: str, password: str) -> dict:
@@ -59,6 +63,120 @@ async def test_ca_can_create_complete_and_draft_compliance_reminder(
         headers=headers,
     )
     assert blocked_draft.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_ca_approval_schedules_reminder_delivery(
+    async_client: AsyncClient, seed_users: dict
+):
+    headers = await _login(async_client, "admin_test", "admin123")
+    client = seed_users["client_a"]
+    client.email = "client-a@example.test"
+    deadline_response = await async_client.post(
+        "/api/compliance/deadlines",
+        json={
+            "tenant_id": client.id,
+            "title": "TDS return",
+            "period": "2026-08",
+            "due_date": "2026-09-10",
+        },
+        headers=headers,
+    )
+    draft_response = await async_client.post(
+        f"/api/compliance/deadlines/{deadline_response.json()['id']}/reminder-drafts",
+        json={"recipient_user_id": client.id},
+        headers=headers,
+    )
+    scheduled_for = datetime.now(timezone.utc) + timedelta(minutes=10)
+    approval_response = await async_client.post(
+        f"/api/compliance/reminder-drafts/{draft_response.json()['id']}/approve",
+        json={"scheduled_for": scheduled_for.isoformat()},
+        headers=headers,
+    )
+
+    assert approval_response.status_code == 200
+    assert approval_response.json()["status"] == "SCHEDULED"
+    assert approval_response.json()["approved_by"] == seed_users["admin"].id
+
+
+def test_scheduled_reminder_task_sends_mock_message(
+    db_session: Session, seed_users: dict, monkeypatch
+):
+    client = seed_users["client_a"]
+    client.email = "client-a@example.test"
+    deadline = create_deadline(
+        db_session,
+        tenant_id=client.id,
+        created_by=seed_users["admin"].id,
+        title="GST return",
+        period="2026-08",
+        due_date="2026-09-10",
+    )
+    draft = ReminderDraft(
+        tenant_id=client.id,
+        deadline_id=deadline.id,
+        recipient_user_id=client.id,
+        subject="GST reminder",
+        body="Please submit records.",
+        status="SCHEDULED",
+        scheduled_for=datetime.now(timezone.utc) - timedelta(minutes=1),
+        created_by=seed_users["admin"].id,
+    )
+    db_session.add(draft)
+    db_session.commit()
+    db_session.refresh(draft)
+    channel = MockReminderDelivery()
+    monkeypatch.setattr(
+        reminder_tasks, "get_reminder_delivery_channel", lambda: channel
+    )
+
+    result = reminder_tasks.deliver_scheduled_reminders.run(
+        db_url="sqlite:///./storage/test_docusync.db"
+    )
+
+    assert result == {"delivered": 1, "failed": 0, "retried": 0, "skipped": 0}
+    assert len(channel.sent_messages) == 1
+    db_session.refresh(draft)
+    assert draft.status == "SENT"
+    assert draft.delivery_attempts == 1
+    assert draft.sent_at is not None
+
+
+def test_scheduled_reminder_task_fails_without_recipient_email(
+    db_session: Session, seed_users: dict
+):
+    client = seed_users["client_a"]
+    deadline = create_deadline(
+        db_session,
+        tenant_id=client.id,
+        created_by=seed_users["admin"].id,
+        title="Annual return",
+        period="2025-26",
+        due_date="2026-09-30",
+    )
+    draft = ReminderDraft(
+        tenant_id=client.id,
+        deadline_id=deadline.id,
+        recipient_user_id=client.id,
+        subject="Annual return reminder",
+        body="Please submit records.",
+        status="SCHEDULED",
+        scheduled_for=datetime.now(timezone.utc) - timedelta(minutes=1),
+        created_by=seed_users["admin"].id,
+    )
+    db_session.add(draft)
+    db_session.commit()
+    db_session.refresh(draft)
+
+    result = reminder_tasks.deliver_scheduled_reminders.run(
+        db_url="sqlite:///./storage/test_docusync.db"
+    )
+
+    assert result == {"delivered": 0, "failed": 1, "retried": 0, "skipped": 0}
+    db_session.refresh(draft)
+    assert draft.status == "FAILED"
+    assert draft.delivery_attempts == 1
+    assert "email" in draft.last_error
 
 
 @pytest.mark.asyncio
