@@ -217,6 +217,16 @@ Dropbox and Gmail use the same `DocumentConnector` protocol but do not yet have 
 
 External connector intake and scheduled sync are optional and disabled by default. Enable `CONNECTOR_SYNC_ENABLED` only after registering authenticated connector clients in the Celery worker process.
 
+### Render deployment
+
+Use `./start.sh` as the Render Web Service start command. It starts only the FastAPI server so the web instance stays within small-instance memory limits. Configure a separate Render Background Worker with:
+
+```bash
+celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=1
+```
+
+Set `START_CELERY_WORKER=true` only for an explicit local all-in-one deployment. The web and worker services must share the same `REDIS_URL`, `DATABASE_URL`, storage configuration, and application secrets.
+
 ---
 
 ## 📋 Project Roadmap
