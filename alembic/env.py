@@ -9,11 +9,13 @@ from alembic import context
 # Import database module to ensure all models register with SQLModel.metadata
 from app.core.database import (  # noqa: F401
     BankTransactionRecord,
+    ComplianceDeadline,
     ConnectorBinding,
     DocumentRecord,
     ImportedFile,
     MCPConfirmationToken,
     MCPToolInvocation,
+    ReminderDraft,
     User,
 )
 

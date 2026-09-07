@@ -160,6 +160,18 @@ Only CA administrators can export verified records:
 
 CSV formula prefixes are escaped before output.
 
+### Manage compliance deadlines and reminder drafts
+
+CA administrators can create tenant-scoped compliance deadlines with a filing period and ISO due date. Clients can view only their own deadlines. CA administrators can mark obligations complete and generate reminder drafts addressed to the client; drafts are stored for review and are never sent automatically.
+
+- Create a deadline with `POST /api/compliance/deadlines`.
+- View deadlines with `GET /api/compliance/deadlines`.
+- Mark a deadline complete with `POST /api/compliance/deadlines/{id}/complete`.
+- Generate an unsent draft with `POST /api/compliance/deadlines/{id}/reminder-drafts`.
+- View drafts with `GET /api/compliance/reminder-drafts`.
+
+Deadline title and period combinations are unique per tenant, dates must use `YYYY-MM-DD`, and completed deadlines cannot receive new reminder drafts.
+
 ## 7. REST API Quick Reference
 
 Authentication uses a bearer token returned by:
@@ -186,6 +198,11 @@ Important endpoints:
 | `POST /api/payments/reconcile` | Record a manual invoice payment | CA admin |
 | `POST /api/payments/reconcile-bank` | Match normalized bank transactions | CA admin |
 | `POST /api/payments/reconcile-bank/{id}/approve` | Approve and apply one bank match | CA admin |
+| `GET /api/compliance/deadlines` | List tenant compliance deadlines | Authenticated |
+| `POST /api/compliance/deadlines` | Create a compliance deadline | CA admin |
+| `POST /api/compliance/deadlines/{id}/complete` | Complete a deadline | CA admin |
+| `POST /api/compliance/deadlines/{id}/reminder-drafts` | Generate an unsent reminder draft | CA admin |
+| `GET /api/compliance/reminder-drafts` | List accessible reminder drafts | Authenticated |
 | `GET /api/documents/export/zoho` | Download Zoho CSV | CA admin |
 | `GET /api/documents/export/tally` | Download Tally XML | CA admin |
 

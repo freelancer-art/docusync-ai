@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 
 from app.api.auth import router as auth_router
 from app.api.client_portal import router as portal_router
+from app.api.compliance import router as compliance_router
 from app.api.documents import router as documents_router
 from app.api.endpoints.users import router as users_router
 from app.api.payments import router as payments_router
@@ -52,6 +53,7 @@ app.include_router(extraction_router, prefix="/api/v1", tags=["Extraction Engine
 app.include_router(documents_router)
 app.include_router(auth_router)
 app.include_router(portal_router)
+app.include_router(compliance_router)
 app.include_router(payments_router)
 app.include_router(users_router)
 

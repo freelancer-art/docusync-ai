@@ -11,7 +11,9 @@ from sqlmodel import Session, SQLModel, create_engine, delete
 
 from app.core.database import (
     BankTransactionRecord,
+    ComplianceDeadline,
     DocumentRecord,
+    ReminderDraft,
     User,
     UserRole,
     get_session,
@@ -38,6 +40,8 @@ def setup_test_db():
 @pytest.fixture
 def db_session():
     with Session(engine) as session:
+        session.exec(delete(ReminderDraft))
+        session.exec(delete(ComplianceDeadline))
         session.exec(delete(BankTransactionRecord))
         session.exec(delete(DocumentRecord))
         session.exec(delete(User))

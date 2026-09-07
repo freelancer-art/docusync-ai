@@ -234,6 +234,7 @@ Test baseline:
 * [x] Add a protected rerun-classification action; category correction is deferred by decision.
 * [x] Add initial automated bank reconciliation using normalized uploaded bank statements, with tenant-scoped persistence, deterministic matching, ambiguity suggestions, and idempotent reruns.
 * [x] Add reconciliation approval workflow and apply approved bank matches to invoice payment totals with idempotency and audit metadata.
-* [ ] Add compliance calendar and client reminder drafts.
+* [x] Add tenant-scoped compliance calendar and unsent client reminder drafts with completion tracking and access controls.
+* [ ] Add reminder delivery channels and scheduled notifications.
 * [ ] Add official-source tax RAG assistant.
 * [ ] Add explainable ITC anomaly/risk scoring.

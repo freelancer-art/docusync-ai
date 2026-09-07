@@ -120,6 +120,45 @@ class BankTransactionRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class ComplianceDeadline(SQLModel, table=True):
+    """Tenant-scoped compliance obligation tracked by the CA team."""
+
+    __tablename__ = "compliancedeadline"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "title", "period"),
+        {"extend_existing": True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="user.id", index=True)
+    title: str
+    form_type: str | None = None
+    period: str
+    due_date: str
+    description: str | None = None
+    status: str = "OPEN"
+    completed_at: datetime | None = None
+    created_by: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ReminderDraft(SQLModel, table=True):
+    """A generated, unsent reminder draft linked to a compliance deadline."""
+
+    __tablename__ = "reminderdraft"
+    __table_args__ = {"extend_existing": True}
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="user.id", index=True)
+    deadline_id: int = Field(foreign_key="compliancedeadline.id", index=True)
+    recipient_user_id: int = Field(foreign_key="user.id")
+    subject: str
+    body: str
+    status: str = "DRAFT"
+    created_by: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class DocumentRecord(SQLModel, table=True):
     __tablename__ = "documentrecord"
     __table_args__ = {"extend_existing": True}
