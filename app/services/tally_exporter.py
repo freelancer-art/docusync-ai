@@ -10,6 +10,7 @@ from app.config import settings
 class TallyExporterService:
     @staticmethod
     def generate_purchase_voucher_xml(record: Any) -> str:
+        """Render one document record as a Tally purchase voucher fragment."""
         raw_str = getattr(record, "raw_json_data", None)
         if raw_str:
             try:
@@ -51,6 +52,7 @@ class TallyExporterService:
 
     @classmethod
     def generate_vouchers_xml(cls, records: list[Any]) -> str:
+        """Render verified document records as a complete Tally import envelope."""
         vouchers = [cls.generate_purchase_voucher_xml(rec) for rec in records]
         vouchers_str = "\n".join(vouchers)
 

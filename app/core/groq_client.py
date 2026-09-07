@@ -13,6 +13,7 @@ logger = logging.getLogger("docusync.ai_client")
 
 
 def get_groq_client() -> Instructor | None:
+    """Create an Instructor-wrapped Groq client when a Groq API key is available."""
     """Instantiates an instructor-wrapped Groq client if GROQ_API_KEY is configured."""
     api_key = getattr(settings, "GROQ_API_KEY", None)
     if not api_key:
@@ -27,6 +28,7 @@ def get_groq_client() -> Instructor | None:
 
 
 def get_gemini_client() -> Instructor | None:
+    """Create an Instructor-wrapped Gemini client when a Gemini API key is available."""
     """Instantiates an instructor-wrapped Google GenAI client if GEMINI_API_KEY is configured."""
     api_key = getattr(settings, "GEMINI_API_KEY", None) or getattr(
         settings, "GOOGLE_API_KEY", None
@@ -44,6 +46,7 @@ def get_gemini_client() -> Instructor | None:
 
 
 def get_ai_client() -> tuple[Instructor | None, str]:
+    """Return the configured structured AI client and its model identifier."""
     """
     Returns the primary available Instructor client and model string.
     Prioritizes Groq, then falls back to Gemini.

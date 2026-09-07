@@ -20,6 +20,7 @@ class VerificationService:
         session: Session | None = None,
         current_doc_id: int | None = None,
     ) -> DocumentAuditResult:
+        """Run deterministic GST, arithmetic, line-item, and duplicate checks."""
         flags: list[AuditFlag] = []
 
         # 1. Vendor GSTIN Format & Checksum Validation
@@ -193,6 +194,7 @@ class VerificationService:
 
     @staticmethod
     def audit_with_llm_anomaly_check(invoice_data: dict) -> AIAnomalyResult | None:
+        """Request optional LLM anomaly analysis when an AI client is configured."""
         client, model = get_ai_client()
         if not client or model == "NONE":
             return None

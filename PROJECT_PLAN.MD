@@ -210,6 +210,7 @@ Test baseline:
 * [x] Add a reusable development workflow checklist and pull-request template so the review criteria are repeated for every implementation.
 * [x] Align pre-commit with the project Ruff version and add whitespace validation.
 * [ ] Continue incremental docstring coverage for legacy internal helpers when those modules are next changed.
+  * [x] Added public API docstrings for parser, verification, Tally export, and AI client helpers.
 * [ ] Add production observability integration (central log sink, metrics, and alerting) before launch.
 
 ## ⚙️ Operations Follow-up

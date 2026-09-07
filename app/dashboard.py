@@ -45,17 +45,161 @@ if "chat_messages" not in st.session_state:
 # AUTHENTICATION & REGISTRATION SCREEN
 # ---------------------------------------------------------
 if not st.session_state.authenticated:
-    st.title("🔒 DocuSync AI Portal")
-
-    auth_mode = st.radio(
-        "Select Action",
-        ["Sign In", "Register New CA Firm", "Register Client"],
-        horizontal=True,
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: #f4f7f6;
+            color: #173042 !important;
+        }
+        .stApp h1,
+        .stApp h2,
+        .stApp h3,
+        .stApp p,
+        .stApp label,
+        .stApp [data-testid="stWidgetLabel"] p {
+            color: #173042 !important;
+        }
+        .stApp [data-baseweb="radio"] label {
+            color: #52616b !important;
+        }
+        .stApp input {
+            color: #173042 !important;
+            background: #ffffff !important;
+        }
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
+        .portal-shell {
+            padding: 2.75rem 0 1rem;
+        }
+        .portal-kicker {
+            color: #087f8c;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+        .portal-copy {
+            color: #52616b;
+            font-size: 1.05rem;
+            line-height: 1.65;
+            max-width: 38rem;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin-top: 1.8rem;
+        }
+        .feature-card {
+            background: #ffffff;
+            border: 1px solid #dce7e5;
+            border-radius: 10px;
+            min-height: 7.1rem;
+            padding: 1rem;
+        }
+        .feature-icon {
+            color: #087f8c;
+            font-size: 1.2rem;
+        }
+        .feature-title {
+            color: #173042;
+            font-size: 0.92rem;
+            font-weight: 700;
+            margin-top: 0.45rem;
+        }
+        .feature-text {
+            color: #68777e;
+            font-size: 0.78rem;
+            line-height: 1.45;
+            margin-top: 0.25rem;
+        }
+        .roadmap-note {
+            border-left: 3px solid #e0a458;
+            color: #68777e;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            margin-top: 1.25rem;
+            padding-left: 0.8rem;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background: #ffffff;
+            border: 1px solid #dce7e5;
+            border-radius: 12px;
+            box-shadow: 0 14px 35px rgba(23, 48, 66, 0.08);
+            padding: 1.35rem 1.4rem;
+        }
+        @media (max-width: 760px) {
+            .portal-shell {
+                padding-top: 1rem;
+            }
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    col1, _ = st.columns([1, 2])
+    hero_col, auth_col = st.columns([1.35, 0.85], gap="large")
 
-    with col1:
+    with hero_col:
+        st.markdown('<div class="portal-shell">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="portal-kicker">Accounting operations, clearly managed</div>',
+            unsafe_allow_html=True,
+        )
+        st.title("DocuSync AI Portal")
+        st.markdown(
+            """
+            <p class="portal-copy">
+            A focused workspace for CAs to turn financial documents into verified,
+            reconciled, and audit-ready records, while keeping every client account
+            safely separated.
+            </p>
+            <div class="feature-grid">
+              <div class="feature-card">
+                <div class="feature-icon">▣</div>
+                <div class="feature-title">Extract and classify</div>
+                <div class="feature-text">Invoices and bank statements, including scanned files and CSVs.</div>
+              </div>
+              <div class="feature-card">
+                <div class="feature-icon">✓</div>
+                <div class="feature-title">Review with confidence</div>
+                <div class="feature-text">Explainable audit flags, GST checks, and human approval queues.</div>
+              </div>
+              <div class="feature-card">
+                <div class="feature-icon">↔</div>
+                <div class="feature-title">Reconcile payments</div>
+                <div class="feature-text">Match bank transactions to invoices with tenant-safe controls.</div>
+              </div>
+              <div class="feature-card">
+                <div class="feature-icon">◷</div>
+                <div class="feature-title">Stay ahead</div>
+                <div class="feature-text">Track compliance deadlines and approve reminder delivery.</div>
+              </div>
+            </div>
+            <div class="roadmap-note">
+            Built for repeatable CA workflows. Official-source tax intelligence and
+            explainable ITC risk scoring are next on the product roadmap.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with auth_col:
+        with st.container(border=True):
+            st.subheader("Welcome back")
+            st.caption("Sign in to your workspace or create an account to get started.")
+            auth_mode = st.radio(
+                "Select Action",
+                ["Sign In", "Register New CA Firm", "Register Client"],
+                horizontal=True,
+            )
+
         if auth_mode == "Sign In":
             username_input = st.text_input("Username")
             password_input = st.text_input("Password", type="password")

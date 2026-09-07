@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_parser_client():
+    """Create the configured Gemini client, or return ``None`` when unconfigured."""
     api_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
     if not api_key:
         return None
