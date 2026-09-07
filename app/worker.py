@@ -11,6 +11,7 @@ from app.core.celery_app import celery_app
 from app.core.database import DocumentRecord
 from app.core.database import engine as default_engine
 from app.services.audit_engine import process_document_audit
+from app.services.bank_reconciliation import persist_normalized_transactions
 from app.services.extractor_service import extract_structured_data
 
 UPLOAD_DIR = settings.UPLOAD_DIR
@@ -60,6 +61,17 @@ def process_document_task(self, doc_id: int, db_url: str | None = None):
             doc.vendor_name = extracted_data.get("vendor_name")
             doc.invoice_number = extracted_data.get("invoice_number")
             doc.total_amount = extracted_data.get("total_amount", 0.0)
+
+            if (
+                doc.document_type == "BANK_STATEMENT"
+                and doc.client_id is not None
+                and extracted_data.get("transactions")
+            ):
+                persist_normalized_transactions(
+                    session,
+                    doc,
+                    extracted_data["transactions"],
+                )
 
             # 3. Audit Engine evaluation
             process_document_audit(doc, session)

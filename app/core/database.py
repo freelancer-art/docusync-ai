@@ -88,6 +88,38 @@ class ImportedFile(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class BankTransactionRecord(SQLModel, table=True):
+    """Tenant-owned normalized bank transaction available for reconciliation."""
+
+    __tablename__ = "banktransactionrecord"
+    __table_args__ = (
+        UniqueConstraint("document_id", "source_row"),
+        {"extend_existing": True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="user.id", index=True)
+    document_id: int = Field(foreign_key="documentrecord.id", index=True)
+    source_row: int = Field(index=True)
+    transaction_date: str
+    description: str
+    reference_number: str | None = None
+    debit: float | None = None
+    credit: float | None = None
+    amount: float
+    balance: float | None = None
+    reconciliation_status: str = "UNMATCHED"
+    matched_document_id: int | None = Field(
+        default=None, foreign_key="documentrecord.id", index=True
+    )
+    match_score: float | None = None
+    match_reason: str | None = None
+    approved_by: int | None = Field(default=None, foreign_key="user.id")
+    approved_at: datetime | None = None
+    applied_amount: float | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class DocumentRecord(SQLModel, table=True):
     __tablename__ = "documentrecord"
     __table_args__ = {"extend_existing": True}

@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlmodel import Session, SQLModel, create_engine, delete
 
-from app.core.database import DocumentRecord, User, UserRole, get_session
+from app.core.database import (
+    BankTransactionRecord,
+    DocumentRecord,
+    User,
+    UserRole,
+    get_session,
+)
 from app.main import app
 
 TEST_DATABASE_URL = "sqlite:///./storage/test_docusync.db"
@@ -32,6 +38,7 @@ def setup_test_db():
 @pytest.fixture
 def db_session():
     with Session(engine) as session:
+        session.exec(delete(BankTransactionRecord))
         session.exec(delete(DocumentRecord))
         session.exec(delete(User))
         session.commit()

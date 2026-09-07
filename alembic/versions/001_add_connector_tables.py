@@ -1,8 +1,9 @@
 """Add tenant connector bindings and imported-file deduplication tables."""
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+
+from alembic import op
 
 revision = "001_add_connector_tables"
 down_revision = None
@@ -62,7 +63,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "tenant_id", "provider", "external_account_id", name="uq_connector_binding_account"
+            "tenant_id",
+            "provider",
+            "external_account_id",
+            name="uq_connector_binding_account",
         ),
     )
     op.create_index("ix_connectorbinding_tenant_id", "connectorbinding", ["tenant_id"])

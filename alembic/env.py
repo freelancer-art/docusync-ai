@@ -8,6 +8,7 @@ from alembic import context
 
 # Import database module to ensure all models register with SQLModel.metadata
 from app.core.database import (  # noqa: F401
+    BankTransactionRecord,
     ConnectorBinding,
     DocumentRecord,
     ImportedFile,
@@ -52,9 +53,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

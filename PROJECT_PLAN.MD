@@ -232,7 +232,8 @@ Test baseline:
 * [x] Normalize common bank CSV columns, dates, signed amounts, balances, references, and malformed-row reports.
 * [x] Add a CA-admin review queue view for unknown/low-confidence documents.
 * [x] Add a protected rerun-classification action; category correction is deferred by decision.
-* [ ] Add automated bank reconciliation using normalized uploaded bank statements.
+* [x] Add initial automated bank reconciliation using normalized uploaded bank statements, with tenant-scoped persistence, deterministic matching, ambiguity suggestions, and idempotent reruns.
+* [x] Add reconciliation approval workflow and apply approved bank matches to invoice payment totals with idempotency and audit metadata.
 * [ ] Add compliance calendar and client reminder drafts.
 * [ ] Add official-source tax RAG assistant.
 * [ ] Add explainable ITC anomaly/risk scoring.

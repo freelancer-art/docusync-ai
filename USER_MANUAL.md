@@ -142,6 +142,15 @@ A document can be `VERIFIED`, `NEEDS_REVIEW`, `REJECTED`, or `FAILED` during pro
 
 Use the payment workflow to enter a positive payment amount. The system calculates the outstanding amount and assigns `UNPAID`, `PARTIAL`, or `PAID`. Duplicate invoice and overpayment rules are validated by the API.
 
+### Review and approve bank matches
+
+Normalized bank transactions are persisted with tenant ownership and can be matched to open invoices using reference, amount, date, and vendor evidence. Matching does not change invoice payment totals. A CA administrator must approve a `MATCHED` result, or provide an `invoice_id` when resolving a `SUGGESTED` result.
+
+- Run matching with `POST /api/payments/reconcile-bank` and provide `transaction_id` or `statement_document_id`.
+- Approve a match with `POST /api/payments/reconcile-bank/{transaction_id}/approve`.
+- The approval records the CA user and timestamp, applies the transaction amount once, and updates the invoice to `PARTIAL` or `PAID`.
+- Repeating an approval request is idempotent. Cross-tenant invoices, debit transactions, and overpayments are rejected.
+
 ### Export accounting data
 
 Only CA administrators can export verified records:
@@ -174,7 +183,9 @@ Important endpoints:
 | `GET /api/documents/{id}/file-url` | Get signed or local file URL | Owner or CA admin |
 | `PATCH /api/documents/{id}` | Update audit fields | CA admin |
 | `POST /api/v1/upload` | Upload and queue a document | Authenticated |
-| `POST /api/payments/{id}` | Record a payment | Authorized user |
+| `POST /api/payments/reconcile` | Record a manual invoice payment | CA admin |
+| `POST /api/payments/reconcile-bank` | Match normalized bank transactions | CA admin |
+| `POST /api/payments/reconcile-bank/{id}/approve` | Approve and apply one bank match | CA admin |
 | `GET /api/documents/export/zoho` | Download Zoho CSV | CA admin |
 | `GET /api/documents/export/tally` | Download Tally XML | CA admin |
 

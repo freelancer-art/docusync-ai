@@ -1,7 +1,8 @@
 """Store explainable document classification metadata."""
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "002_add_classification_metadata"
 down_revision = "001_add_connector_tables"
@@ -10,7 +11,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("documentrecord")}
+    columns = {
+        column["name"]
+        for column in sa.inspect(op.get_bind()).get_columns("documentrecord")
+    }
     if "classification_confidence" not in columns:
         op.add_column(
             "documentrecord",
